@@ -30,6 +30,6 @@ public class RegisterRequestDTO {
     private String telefono;
 
     @NotBlank(message = "El rol es requerido")
-    @ValidRole(message = "Rol no valido para registro")
+    @ValidRole(message = "Rol no valido para registro", includeAdmin = true) // <--- AGREGA ESTO
     private String rol;
 }
