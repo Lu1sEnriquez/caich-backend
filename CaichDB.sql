@@ -13,8 +13,7 @@ CREATE TABLE [Usuarios] (
     [Email] NVARCHAR(150) NOT NULL,
     [Folio] NVARCHAR(50),
     [idAlumno] NVARCHAR(50), -- id del ITSON
-    [PasswordHash] NVARCHAR(255) NOT NULL,
-    [Telefono] NVARCHAR(20),
+    [PasswordHash] NVARCHAR(255) NOT NULL,sed
     [Rol] NVARCHAR(20) NOT NULL,
     [Estado] NVARCHAR(20) NOT NULL DEFAULT 'Activo',
     [Foto] NVARCHAR(500),

@@ -5,7 +5,9 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.5.7</version>
+        <version>3.5.7</version>
+
+
 		<!-- <version>3.1.5</version> -->
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
@@ -32,6 +34,7 @@
 		<mapstruct.version>1.5.5.Final</mapstruct.version>
 		<jjwt.version>0.11.5</jjwt.version>
 	</properties>
+
 	<dependencies>
 		<!-- Spring Boot Starters -->
 		<dependency>
@@ -145,5 +148,4 @@
 			</plugin>
 		</plugins>
 	</build>
-
 </project>
