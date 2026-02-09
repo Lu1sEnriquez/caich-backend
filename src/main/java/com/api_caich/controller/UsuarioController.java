@@ -1,5 +1,6 @@
 package com.api_caich.controller;
 
+import com.api_caich.constants.AppConstants;
 import com.api_caich.dto.BaseResponseDTO;
 import com.api_caich.dto.DataResponseDTO;
 import com.api_caich.dto.usuario.*;
@@ -19,7 +20,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -37,7 +37,7 @@ public class UsuarioController {
     private final UsuarioService usuarioService;
 
     @GetMapping
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get all users", description = "Get paginated list of all users")
     public ResponseEntity<DataResponseDTO<Page<UsuarioDTO>>> obtenerTodosUsuarios(
             @Parameter(description = "Page number") @RequestParam(defaultValue = "0") int page,
@@ -55,7 +55,7 @@ public class UsuarioController {
     }
 
     @GetMapping("/search")
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Search users", description = "Search users by name, email, folio or student ID")
     public ResponseEntity<DataResponseDTO<Page<UsuarioDTO>>> buscarUsuarios(
             @Parameter(description = "Search term") @RequestParam String search,
@@ -68,7 +68,7 @@ public class UsuarioController {
     }
 
     @GetMapping("/rol/{rol}")
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get users by role", description = "Get paginated list of users by role")
     public ResponseEntity<DataResponseDTO<Page<UsuarioDTO>>> obtenerUsuariosPorRol(
             @Parameter(description = "User role") @PathVariable String rol,
@@ -81,7 +81,7 @@ public class UsuarioController {
     }
 
     @GetMapping("/rol/{rol}/activos")
-    // @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA')")
     @Operation(summary = "Get active users by role", description = "Get list of active users by role")
     public ResponseEntity<DataResponseDTO<List<UsuarioDTO>>> obtenerUsuariosActivosPorRol(
             @Parameter(description = "User role") @PathVariable String rol) {
@@ -91,7 +91,7 @@ public class UsuarioController {
     }
 
     @GetMapping("/estado/{estado}")
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get users by status", description = "Get paginated list of users by status")
     public ResponseEntity<DataResponseDTO<Page<UsuarioDTO>>> obtenerUsuariosPorEstado(
             @Parameter(description = "User status") @PathVariable String estado,
@@ -104,8 +104,7 @@ public class UsuarioController {
     }
 
     @GetMapping("/{usuarioId}")
-    // @PreAuthorize("hasRole('ADMIN') or #usuarioId ==
-    // authentication.principal.id")
+    @PreAuthorize("hasRole('ADMIN') or #usuarioId == authentication.principal.id")
     @Operation(summary = "Get user by ID", description = "Get user details by ID")
     public ResponseEntity<DataResponseDTO<UsuarioDTO>> obtenerUsuarioPorId(
             @Parameter(description = "User ID") @PathVariable Long usuarioId) {
@@ -115,7 +114,7 @@ public class UsuarioController {
     }
 
     @GetMapping("/email/{email}")
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get user by email", description = "Get user details by email")
     public ResponseEntity<DataResponseDTO<UsuarioDTO>> obtenerUsuarioPorEmail(
             @Parameter(description = "User email") @PathVariable String email) {
@@ -125,7 +124,7 @@ public class UsuarioController {
     }
 
     @PostMapping
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Create user", description = "Create a new user")
     public ResponseEntity<DataResponseDTO<UsuarioDTO>> crearUsuario(
             @Valid @RequestBody CrearUsuarioDTO crearUsuarioDTO,
@@ -136,8 +135,7 @@ public class UsuarioController {
     }
 
     @PutMapping("/{usuarioId}")
-    // @PreAuthorize("hasRole('ADMIN') or #usuarioId ==
-    // authentication.principal.id")
+    @PreAuthorize("hasRole('ADMIN') or #usuarioId == authentication.principal.id")
     @Operation(summary = "Update user", description = "Update user details")
     public ResponseEntity<DataResponseDTO<UsuarioDTO>> actualizarUsuario(
             @Parameter(description = "User ID") @PathVariable Long usuarioId,
@@ -150,7 +148,7 @@ public class UsuarioController {
     }
 
     @PutMapping("/{usuarioId}/estado")
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Change user status", description = "Change user status (Activo, Suspendido, Inactivo)")
     public ResponseEntity<DataResponseDTO<UsuarioDTO>> cambiarEstadoUsuario(
             @Parameter(description = "User ID") @PathVariable Long usuarioId,
@@ -163,8 +161,7 @@ public class UsuarioController {
     }
 
     @PutMapping("/{usuarioId}/password")
-    // @PreAuthorize("hasRole('ADMIN') or #usuarioId ==
-    // authentication.principal.id")
+    @PreAuthorize("hasRole('ADMIN') or #usuarioId == authentication.principal.id")
     @Operation(summary = "Change password", description = "Change user password")
     public ResponseEntity<BaseResponseDTO> cambiarPassword(
             @Parameter(description = "User ID") @PathVariable Long usuarioId,
@@ -177,7 +174,7 @@ public class UsuarioController {
     }
 
     @DeleteMapping("/{usuarioId}")
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Delete user", description = "Delete user (only if no related data exists)")
     public ResponseEntity<BaseResponseDTO> eliminarUsuario(
             @Parameter(description = "User ID") @PathVariable Long usuarioId,
@@ -189,7 +186,7 @@ public class UsuarioController {
     }
 
     @GetMapping("/stats/activos")
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get active users count", description = "Get count of active users")
     public ResponseEntity<DataResponseDTO<Long>> contarUsuariosActivos() {
         Long count = usuarioService.contarUsuariosActivos();
@@ -197,7 +194,7 @@ public class UsuarioController {
     }
 
     @GetMapping("/stats/nuevos-pacientes")
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get new patients count", description = "Get count of new patients in last 30 days")
     public ResponseEntity<DataResponseDTO<Long>> contarNuevosPacientesUltimoMes() {
         Long count = usuarioService.contarNuevosPacientesUltimoMes();

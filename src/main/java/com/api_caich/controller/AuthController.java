@@ -1,5 +1,6 @@
 package com.api_caich.controller;
 
+import com.api_caich.constants.SecurityConstants;
 import com.api_caich.dto.BaseResponseDTO;
 import com.api_caich.dto.DataResponseDTO;
 import com.api_caich.dto.LoginRequestDTO;
@@ -15,7 +16,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -34,7 +34,7 @@ public class AuthController {
     @Operation(summary = "User login", description = "Authenticate user and return JWT tokens")
     public ResponseEntity<DataResponseDTO<LoginResponseDTO>> login(@Valid @RequestBody LoginRequestDTO loginRequest) {
         LoginResponseDTO response = authService.login(loginRequest);
-        return ResponseEntity.ok(DataResponseDTO.success(response, "Login successful"));
+        return ResponseEntity.ok(DataResponseDTO.success(response, SecurityConstants.SUCCESS_LOGIN));
     }
 
     @PostMapping("/register")
@@ -42,7 +42,7 @@ public class AuthController {
     public ResponseEntity<DataResponseDTO<LoginResponseDTO>> register(
             @Valid @RequestBody RegisterRequestDTO registerRequest) {
         LoginResponseDTO response = authService.register(registerRequest);
-        return ResponseEntity.ok(DataResponseDTO.success(response, "Registration successful"));
+        return ResponseEntity.ok(DataResponseDTO.success(response, SecurityConstants.SUCCESS_REGISTER));
     }
 
     @PostMapping("/refresh")
@@ -50,7 +50,7 @@ public class AuthController {
     public ResponseEntity<DataResponseDTO<LoginResponseDTO>> refreshToken(
             @Valid @RequestBody RefreshTokenRequestDTO refreshTokenRequest) {
         LoginResponseDTO response = authService.refreshToken(refreshTokenRequest);
-        return ResponseEntity.ok(DataResponseDTO.success(response, "Token refreshed successfully"));
+        return ResponseEntity.ok(DataResponseDTO.success(response, SecurityConstants.SUCCESS_TOKEN_REFRESH));
     }
 
     @PostMapping("/logout")
@@ -62,15 +62,15 @@ public class AuthController {
 
         authService.logout(logoutRequest.getRefreshToken());
 
-        return ResponseEntity.ok(BaseResponseDTO.success("Sesión cerrada exitosamente"));
+        return ResponseEntity.ok(BaseResponseDTO.success(SecurityConstants.SUCCESS_LOGOUT));
     }
 
     @PostMapping("/logout-all")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Logout all sessions", description = "Logout user from all devices")
-    public ResponseEntity<BaseResponseDTO> logoutAll(Authentication authentication) {
-        Long usuarioId = Long.parseLong(authentication.getName());
+    public ResponseEntity<BaseResponseDTO> logoutAll(@AuthenticationPrincipal CustomUserDetails authentication) {
+        Long usuarioId = authentication.getId();
         authService.logoutAllSessions(usuarioId);
-        return ResponseEntity.ok(BaseResponseDTO.success("Logged out from all devices"));
+        return ResponseEntity.ok(BaseResponseDTO.success(SecurityConstants.SUCCESS_LOGOUT_ALL));
     }
 }

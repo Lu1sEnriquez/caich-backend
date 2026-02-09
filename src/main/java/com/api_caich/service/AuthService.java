@@ -1,10 +1,12 @@
 package com.api_caich.service;
 
+import com.api_caich.constants.SecurityConstants;
 import com.api_caich.dto.LoginRequestDTO;
 import com.api_caich.dto.LoginResponseDTO;
 import com.api_caich.dto.RefreshTokenRequestDTO;
 import com.api_caich.dto.RegisterRequestDTO;
 import com.api_caich.entity.Usuario;
+import com.api_caich.enums.EstadoUsuario;
 import com.api_caich.enums.Role;
 import com.api_caich.exception.BusinessException;
 import com.api_caich.repository.UsuarioRepository;
@@ -56,17 +58,17 @@ public class AuthService {
             return LoginResponseDTO.builder()
                     .accessToken(accessToken)
                     .refreshToken(refreshToken.getToken())
-                    .type("Bearer")
+                    .type(SecurityConstants.TOKEN_TYPE)
                     .usuarioId(usuario.getUsuarioId())
                     .nombreCompleto(usuario.getNombreCompleto())
                     .email(usuario.getEmail())
                     .rol(usuario.getRol())
-                    .expiresIn(86400L) // 24 horas en segundos
+                    .expiresIn(com.api_caich.constants.AppConstants.JWT_EXPIRATION_SECONDS)
                     .build();
 
         } catch (BadCredentialsException e) {
             log.warn("Intento de login fallido para: {}", loginRequest.getEmail());
-            throw new BusinessException("Credenciales inválidas");
+            throw new BusinessException(SecurityConstants.ERROR_INVALID_CREDENTIALS);
         }
     }
 
@@ -101,7 +103,7 @@ public class AuthService {
         usuario.setPasswordHash(passwordEncoder.encode(registerRequest.getPassword()));
         usuario.setTelefono(registerRequest.getTelefono());
         usuario.setRol(role.getNombre());
-        usuario.setEstado("Activo");
+        usuario.setEstado(EstadoUsuario.ACTIVO.getValor());
         // usuario.setFechaRegistro(java.time.LocalDateTime.now());
 
         Usuario savedUsuario = usuarioRepository.save(usuario);
@@ -115,12 +117,12 @@ public class AuthService {
         return LoginResponseDTO.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken.getToken())
-                .type("Bearer")
+                .type(SecurityConstants.TOKEN_TYPE)
                 .usuarioId(savedUsuario.getUsuarioId())
                 .nombreCompleto(savedUsuario.getNombreCompleto())
                 .email(savedUsuario.getEmail())
                 .rol(savedUsuario.getRol())
-                .expiresIn(86400L)
+                .expiresIn(com.api_caich.constants.AppConstants.JWT_EXPIRATION_SECONDS)
                 .build();
     }
 
@@ -142,12 +144,12 @@ public class AuthService {
         return LoginResponseDTO.builder()
                 .accessToken(newAccessToken)
                 .refreshToken(newRefreshToken.getToken())
-                .type("Bearer")
+                .type(SecurityConstants.TOKEN_TYPE)
                 .usuarioId(usuario.getUsuarioId())
                 .nombreCompleto(usuario.getNombreCompleto())
                 .email(usuario.getEmail())
                 .rol(usuario.getRol())
-                .expiresIn(86400L)
+                .expiresIn(com.api_caich.constants.AppConstants.JWT_EXPIRATION_SECONDS)
                 .build();
     }
 

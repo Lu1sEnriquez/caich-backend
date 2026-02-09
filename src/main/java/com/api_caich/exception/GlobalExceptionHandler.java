@@ -1,5 +1,6 @@
 package com.api_caich.exception;
 
+import com.api_caich.constants.SecurityConstants;
 import com.api_caich.dto.BaseResponseDTO;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.security.SignatureException;
@@ -38,31 +39,31 @@ public class GlobalExceptionHandler {
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .collect(Collectors.joining(", "));
 
-        BaseResponseDTO response = BaseResponseDTO.error("Validation failed: " + errorMessage);
+        BaseResponseDTO response = BaseResponseDTO.error(SecurityConstants.ERROR_VALIDATION_FAILED + errorMessage);
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<BaseResponseDTO> handleBadCredentialsException(BadCredentialsException ex) {
-        BaseResponseDTO response = BaseResponseDTO.error("Invalid credentials");
+        BaseResponseDTO response = BaseResponseDTO.error(SecurityConstants.ERROR_INVALID_CREDENTIALS);
         return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<BaseResponseDTO> handleAccessDeniedException(AccessDeniedException ex) {
-        BaseResponseDTO response = BaseResponseDTO.error("Access denied");
+        BaseResponseDTO response = BaseResponseDTO.error(SecurityConstants.ERROR_ACCESS_DENIED);
         return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler({ SignatureException.class, ExpiredJwtException.class })
     public ResponseEntity<BaseResponseDTO> handleJwtException(Exception ex) {
-        BaseResponseDTO response = BaseResponseDTO.error("Invalid or expired token");
+        BaseResponseDTO response = BaseResponseDTO.error(SecurityConstants.ERROR_INVALID_TOKEN);
         return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<BaseResponseDTO> handleGlobalException(Exception ex, WebRequest request) {
-        BaseResponseDTO response = BaseResponseDTO.error("An unexpected error occurred" + " " + ex.getMessage());
+        BaseResponseDTO response = BaseResponseDTO.error(SecurityConstants.ERROR_UNEXPECTED + " " + ex.getMessage());
         return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

@@ -38,7 +38,7 @@ public class NotificacionService {
         notificacion.setReferenciaUrl("/tickets/" + ticketId);
 
         notificacionRepository.save(notificacion);
-        log.info("Cita próxima notification created for user: {}", pacienteId);
+        log.info("Cita proxima notification created for user: {}", pacienteId);
     }
 
     public void notificarPagoVerificado(Long pacienteId, Long ticketId, String folio) {
@@ -144,42 +144,59 @@ public class NotificacionService {
             // - Notificación push
             // - Mensaje interno en la app
 
-            log.info("📧 Notificación de cita agendada enviada - Paciente: {}, Ticket: {}, Fecha: {}",
+            log.info("Notificacion de cita agendada enviada - Paciente: {}, Ticket: {}, Fecha: {}",
                     pacienteId, ticketId, fecha);
 
         } catch (Exception e) {
-            log.error("Error enviando notificación de cita agendada", e);
+            log.error("Error enviando notificacion de cita agendada", e);
             // No lanzar excepción para no afectar el flujo principal
         }
     }
 
     public void notificarCitaCancelada(Long pacienteId, Long ticketId, String folio) {
         try {
-            log.info("📧 Notificación de cita cancelada - Paciente: {}, Ticket: {}, Folio: {}",
+            log.info("Notificacion de cita cancelada - Paciente: {}, Ticket: {}, Folio: {}",
                     pacienteId, ticketId, folio);
             // Implementar notificación por email/SMS
         } catch (Exception e) {
-            log.error("Error enviando notificación de cancelación", e);
+            log.error("Error enviando notificacion de cancelacion", e);
         }
+    }
+
+    public void notificarCancelacionCita(Long pacienteId, Long ticketId, String folio, String motivo) {
+        Usuario paciente = usuarioRepository.findById(pacienteId).orElse(null);
+        if (paciente == null)
+            return;
+
+        Notificacion notificacion = new Notificacion();
+        notificacion.setUsuario(paciente);
+        notificacion.setTipo("CitaCancelada");
+        notificacion.setTitulo("Cita Cancelada");
+        notificacion.setMensaje(String.format("Tu cita (Folio: %s) ha sido cancelada. Motivo: %s", folio, motivo));
+        notificacion.setReferenciaId(ticketId);
+        notificacion.setReferenciaUrl("/tickets/" + ticketId);
+
+        notificacionRepository.save(notificacion);
+        log.info("Cita cancelada notification created for user: {}", pacienteId);
     }
 
     public void notificarCambioCita(Long pacienteId, Long ticketId, String cambios) {
         try {
-            log.info("📧 Notificación de cambios en cita - Paciente: {}, Ticket: {}, Cambios: {}",
+            log.info("Notificacion de cambios en cita - Paciente: {}, Ticket: {}, Cambios: {}",
                     pacienteId, ticketId, cambios);
             // Implementar notificación por email/SMS
         } catch (Exception e) {
-            log.error("Error enviando notificación de cambios", e);
+            log.error("Error enviando notificacion de cambios", e);
         }
     }
 
     public void notificarCitaEliminada(Long pacienteId, Long ticketId, String folio) {
         try {
-            log.info("📧 Notificación de cita eliminada - Paciente: {}, Ticket: {}, Folio: {}",
+            log.info("Notificacion de cita eliminada - Paciente: {}, Ticket: {}, Folio: {}",
                     pacienteId, ticketId, folio);
             // Implementar notificación por email/SMS
         } catch (Exception e) {
-            log.error("Error enviando notificación de eliminación", e);
+            log.error("Error enviando notificacion de eliminacion", e);
         }
     }
 

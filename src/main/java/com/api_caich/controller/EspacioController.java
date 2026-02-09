@@ -15,7 +15,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -94,9 +93,9 @@ public class EspacioController {
     public ResponseEntity<DataResponseDTO<EspacioDTO>> actualizarEspacio(
             @Parameter(description = "Space ID") @PathVariable Long espacioId,
             @Valid @RequestBody ActualizarEspacioDTO actualizarEspacioDTO,
-            Authentication authentication) {
+            @AuthenticationPrincipal CustomUserDetails authentication) {
 
-        Long usuarioId = Long.parseLong(authentication.getName());
+        Long usuarioId = authentication.getId();
         EspacioDTO espacio = espacioService.actualizarEspacio(espacioId, actualizarEspacioDTO, usuarioId);
         return ResponseEntity.ok(DataResponseDTO.success(espacio, "Space updated successfully"));
     }
@@ -107,9 +106,9 @@ public class EspacioController {
     public ResponseEntity<DataResponseDTO<EspacioDTO>> cambiarEstadoEspacio(
             @Parameter(description = "Space ID") @PathVariable Long espacioId,
             @RequestParam Boolean estaActivo,
-            Authentication authentication) {
+            @AuthenticationPrincipal CustomUserDetails authentication) {
 
-        Long usuarioId = Long.parseLong(authentication.getName());
+        Long usuarioId = authentication.getId();
         EspacioDTO espacio = espacioService.cambiarEstadoEspacio(espacioId, estaActivo, usuarioId);
         return ResponseEntity.ok(DataResponseDTO.success(espacio, "Space status updated successfully"));
     }
@@ -119,26 +118,10 @@ public class EspacioController {
     @Operation(summary = "Delete space", description = "Delete space (only if no related tickets exist)")
     public ResponseEntity<BaseResponseDTO> eliminarEspacio(
             @Parameter(description = "Space ID") @PathVariable Long espacioId,
-            Authentication authentication) {
+            @AuthenticationPrincipal CustomUserDetails authentication) {
 
-        Long usuarioId = Long.parseLong(authentication.getName());
+        Long usuarioId = authentication.getId();
         espacioService.eliminarEspacio(espacioId, usuarioId);
         return ResponseEntity.ok(BaseResponseDTO.success("Space deleted successfully"));
-    }
-
-    @GetMapping("/stats/activos")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Get active spaces count", description = "Get count of active spaces")
-    public ResponseEntity<DataResponseDTO<Long>> contarEspaciosActivos() {
-        Long count = espacioService.contarEspaciosActivos();
-        return ResponseEntity.ok(DataResponseDTO.success(count, "Active spaces count retrieved"));
-    }
-
-    @GetMapping("/tipos")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA', 'ALUMNO')")
-    @Operation(summary = "Get space types", description = "Get list of available space types")
-    public ResponseEntity<DataResponseDTO<List<String>>> obtenerTiposEspacio() {
-        List<String> tipos = espacioService.obtenerTiposEspacio();
-        return ResponseEntity.ok(DataResponseDTO.success(tipos, "Space types retrieved successfully"));
     }
 }

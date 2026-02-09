@@ -21,6 +21,15 @@ public enum Role {
         this.descripcion = descripcion;
     }
 
+    /**
+     * Obtiene el valor del rol sin el prefijo "ROLE_"
+     * Útil para usar con .hasRole() de Spring Security
+     * @return El valor del rol (ej: "ADMIN", "TERAPEUTA")
+     */
+    public String getRoleValue() {
+        return this.authority.replace("ROLE_", "");
+    }
+
     // Método para buscar por nombre
     public static Role fromNombre(String nombre) {
         for (Role role : values()) {

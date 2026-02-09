@@ -1,14 +1,15 @@
 package com.api_caich.dto.usuario;
 
+import com.api_caich.enums.EstadoUsuario;
+import com.api_caich.validation.ValidEnum;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 @Data
 public class CambiarEstadoDTO {
 
     @NotBlank(message = "El estado es requerido")
-    @Pattern(regexp = "^(Activo|Suspendido|Inactivo)$", message = "Estado no valido. Debe ser: Activo, Suspendido o Inactivo")
+    @ValidEnum(enumClass = EstadoUsuario.class, message = "Estado no válido. Valores permitidos: Activo, Suspendido, Inactivo")
     private String estado;
 
     private String motivo;

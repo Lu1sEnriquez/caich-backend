@@ -40,7 +40,7 @@ public class Usuario extends BaseEntity {
     private String rol;
 
     @Column(name = "Estado", nullable = false, length = 20)
-    private String estado = "Activo";
+    private String estado = com.api_caich.enums.EstadoUsuario.ACTIVO.getValor();
 
     @Column(name = "Foto", length = 500)
     private String foto;

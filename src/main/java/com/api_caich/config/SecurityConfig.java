@@ -1,5 +1,6 @@
 package com.api_caich.config;
 
+import com.api_caich.enums.Role;
 import com.api_caich.security.JwtAuthenticationFilter;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,19 +59,19 @@ public class SecurityConfig {
                                 "/configuracion/**",
                                 "/health/database",
                                 "/pagos/**")
-                        .hasRole("ADMIN")
+                        .hasRole(Role.ADMINISTRADOR.getRoleValue())
 
                         // Endpoints PACIENTE
                         .requestMatchers(
                                 "/pagos/registrar-propio",
                                 "/tickets/mis-tickets",
                                 "/tickets/{ticketId}/comprobante"
-                        ).hasRole("PACIENTE")
+                        ).hasRole(Role.PACIENTE.getRoleValue())
 
                         // Endpoints ALUMNO personales
                         .requestMatchers(
                                 "/prestamos/mis-prestamos"
-                        ).hasRole("ALUMNO")
+                        ).hasRole(Role.ALUMNO.getRoleValue())
 
                         // Endpoints de terapeuta
                         .requestMatchers(
@@ -78,7 +79,7 @@ public class SecurityConfig {
                                 "/prestamos/**",
                                 "/citas/**",
                                 "/configuracion-horarios/**")
-                        .hasAnyRole("ADMIN", "TERAPEUTA")
+                        .hasAnyRole(Role.ADMINISTRADOR.getRoleValue(), Role.TERAPEUTA.getRoleValue())
 
                         // Endpoints compartidos
                         .requestMatchers(
@@ -86,7 +87,7 @@ public class SecurityConfig {
                                 "/espacios/**",
                                 "/inventario/productos/stock-bajo",
                                 "/inventario/productos/sin-stock")
-                        .hasAnyRole("ADMIN", "TERAPEUTA", "ALUMNO")
+                        .hasAnyRole(Role.ADMINISTRADOR.getRoleValue(), Role.TERAPEUTA.getRoleValue(), Role.ALUMNO.getRoleValue())
 
                         // Endpoints de testing de roles
                         .requestMatchers(

@@ -15,7 +15,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -104,9 +103,9 @@ public class CuentaBancariaController {
     public ResponseEntity<DataResponseDTO<CuentaBancariaDTO>> actualizarCuenta(
             @Parameter(description = "Bank account ID") @PathVariable Long cuentaId,
             @Valid @RequestBody ActualizarCuentaBancariaDTO actualizarCuentaDTO,
-            Authentication authentication) {
+            @AuthenticationPrincipal CustomUserDetails authentication) {
 
-        Long usuarioId = Long.parseLong(authentication.getName());
+        Long usuarioId = authentication.getId();
         CuentaBancariaDTO cuenta = cuentaBancariaService.actualizarCuenta(cuentaId, actualizarCuentaDTO, usuarioId);
         return ResponseEntity.ok(DataResponseDTO.success(cuenta, "Bank account updated successfully"));
     }
@@ -117,9 +116,9 @@ public class CuentaBancariaController {
     public ResponseEntity<DataResponseDTO<CuentaBancariaDTO>> cambiarEstadoCuenta(
             @Parameter(description = "Bank account ID") @PathVariable Long cuentaId,
             @RequestParam Boolean estaActiva,
-            Authentication authentication) {
+            @AuthenticationPrincipal CustomUserDetails authentication) {
 
-        Long usuarioId = Long.parseLong(authentication.getName());
+        Long usuarioId = authentication.getId();
         CuentaBancariaDTO cuenta = cuentaBancariaService.cambiarEstadoCuenta(cuentaId, estaActiva, usuarioId);
         return ResponseEntity.ok(DataResponseDTO.success(cuenta, "Bank account status updated successfully"));
     }
@@ -129,18 +128,10 @@ public class CuentaBancariaController {
     @Operation(summary = "Delete bank account", description = "Delete bank account (only if no related tickets exist)")
     public ResponseEntity<BaseResponseDTO> eliminarCuenta(
             @Parameter(description = "Bank account ID") @PathVariable Long cuentaId,
-            Authentication authentication) {
+            @AuthenticationPrincipal CustomUserDetails authentication) {
 
-        Long usuarioId = Long.parseLong(authentication.getName());
+        Long usuarioId = authentication.getId();
         cuentaBancariaService.eliminarCuenta(cuentaId, usuarioId);
         return ResponseEntity.ok(BaseResponseDTO.success("Bank account deleted successfully"));
-    }
-
-    @GetMapping("/stats/activas")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Get active bank accounts count", description = "Get count of active bank accounts")
-    public ResponseEntity<DataResponseDTO<Long>> contarCuentasActivas() {
-        Long count = cuentaBancariaService.contarCuentasActivas();
-        return ResponseEntity.ok(DataResponseDTO.success(count, "Active bank accounts count retrieved"));
     }
 }

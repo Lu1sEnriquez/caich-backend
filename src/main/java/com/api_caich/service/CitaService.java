@@ -90,7 +90,7 @@ public class CitaService {
 
     @Transactional
     public CitaDTO crearCita(CrearCitaDTO crearCitaDTO, Long usuarioId) {
-        log.info("Creando cita con creación automática de pago pendiente - Transactional");
+        log.info("Creando cita con creacion automatica de pago pendiente - Transactional");
 
         // Validar disponibilidad del espacio
         validarDisponibilidadEspacio(crearCitaDTO.getEspacioId(), crearCitaDTO.getFecha(),
@@ -144,7 +144,7 @@ public class CitaService {
         ticket.setModalidad(crearCitaDTO.getModalidad());
         ticket.setMontoPagado(BigDecimal.ZERO); // Inicialmente 0, se paga después
         ticket.setEstadoTicket("Agendado");
-        ticket.setEstadoPago("Pendiente"); // ✅ PAGO PENDIENTE CREADO AUTOMÁTICAMENTE
+        ticket.setEstadoPago("Pendiente"); // PAGO PENDIENTE CREADO AUTOMATICAMENTE
         ticket.setCostoEspacio(montoCalculado); // Usar el monto calculado como costo del espacio
         ticket.setCostoMateriales(BigDecimal.ZERO);
         ticket.setCostoAdicional(BigDecimal.ZERO);
@@ -152,14 +152,14 @@ public class CitaService {
         ticket.setCreadoPor(creadoPor);
         ticket.setNotas(crearCitaDTO.getNotas());
 
-        // ✅ AGREGAR CELULAR SI ESTÁ PRESENTE EN EL DTO
+        // AGREGAR CELULAR SI ESTA PRESENTE EN EL DTO
         if (crearCitaDTO.getCelular() != null && !crearCitaDTO.getCelular().trim().isEmpty()) {
             ticket.setCelular(crearCitaDTO.getCelular());
         }
 
         Ticket savedTicket = ticketRepository.save(ticket);
 
-        // ✅ CREAR NOTIFICACIÓN PARA EL PACIENTE
+        // CREAR NOTIFICACION PARA EL PACIENTE
         notificacionService.notificarCitaAgendada(
                 paciente.getUsuarioId(),
                 savedTicket.getTicketId(),
@@ -167,7 +167,7 @@ public class CitaService {
                 espacio.getNombre(),
                 terapeuta.getNombreCompleto());
 
-        log.info("✅ Cita creada con pago pendiente automático - Ticket: {} - Fecha: {} - Materia: {} - Monto: {}",
+        log.info("Cita creada con pago pendiente automatico - Ticket: {} - Fecha: {} - Materia: {} - Monto: {}",
                 savedTicket.getTicketId(), savedTicket.getFecha(),
                 savedTicket.getMateria(), montoCalculado);
 
@@ -191,7 +191,7 @@ public class CitaService {
 
         String cambios = "";
 
-        // ✅ VALIDAR DISPONIBILIDAD PARA CAMBIOS DE FECHA/HORA
+        // VALIDAR DISPONIBILIDAD PARA CAMBIOS DE FECHA/HORA
         if (actualizarCitaDTO.getFecha() != null || actualizarCitaDTO.getDuracion() != null) {
             LocalDateTime nuevaFecha = actualizarCitaDTO.getFecha() != null ? actualizarCitaDTO.getFecha()
                     : ticket.getFecha();
@@ -233,7 +233,7 @@ public class CitaService {
             cambios += "Duracion: " + ticket.getDuracion() + " -> " + actualizarCitaDTO.getDuracion() + "; ";
             ticket.setDuracion(actualizarCitaDTO.getDuracion());
 
-            // ✅ RECALCULAR COSTOS SI CAMBIA LA DURACIÓN
+            // RECALCULAR COSTOS SI CAMBIA LA DURACION
             if (ticket.getEspacio() != null) {
                 //TODO: Revisar esta funcion calcularCostoPorDuracion
                 BigDecimal nuevoCosto = calcularCostoPorDuracion(actualizarCitaDTO.getDuracion(),
@@ -275,7 +275,7 @@ public class CitaService {
             ticket.setModalidad(actualizarCitaDTO.getModalidad());
         }
 
-        // ✅ MANEJO ESPECIAL PARA CAMBIO DE ESTADO A "CANCELADO"
+        // MANEJO ESPECIAL PARA CAMBIO DE ESTADO A "CANCELADO"
         boolean seCancelo = false;
         if (actualizarCitaDTO.getEstadoTicket() != null) {
             String estadoAnterior = ticket.getEstadoTicket();
@@ -307,7 +307,7 @@ public class CitaService {
 
         log.info("Cita actualizada: {} - Cambios: {}", updatedTicket.getTicketId(), cambios);
 
-        // ✅ NOTIFICAR CAMBIOS IMPORTANTES
+        // NOTIFICAR CAMBIOS IMPORTANTES
         if (cambios.contains("Fecha") || cambios.contains("Espacio")) {
             notificacionService.notificarCambioCita(
                     ticket.getPaciente().getUsuarioId(),
@@ -334,13 +334,13 @@ public class CitaService {
             throw new BusinessException("Solo se pueden eliminar citas en estado 'Agendado'");
         }
 
-        // ✅ VALIDAR QUE NO TENGA PAGOS ASOCIADOS (excepto pendientes o cancelados)
+        // VALIDAR QUE NO TENGA PAGOS ASOCIADOS (excepto pendientes o cancelados)
         if ("Pagado".equals(ticket.getEstadoPago()) || "Verificado".equals(ticket.getEstadoPago())) {
             throw new BusinessException("No se puede eliminar una cita con pagos " + ticket.getEstadoPago() +
                     ". Primero cancele el pago.");
         }
 
-        // ✅ VALIDAR QUE NO TENGA PRÉSTAMOS DE MATERIALES ACTIVOS
+        // VALIDAR QUE NO TENGA PRESTAMOS DE MATERIALES ACTIVOS
         if (ticket.getPrestamos() != null && !ticket.getPrestamos().isEmpty()) {
             boolean tienePrestamosActivos = ticket.getPrestamos().stream()
                     .anyMatch(prestamo -> "Activo".equals(prestamo.getEstadoPrestamo()) ||
@@ -351,13 +351,13 @@ public class CitaService {
             }
         }
 
-        // ✅ ELIMINAR DETALLES DEL TICKET (PRODUCTOS ASOCIADOS)
+        // ELIMINAR DETALLES DEL TICKET (PRODUCTOS ASOCIADOS)
         if (ticket.getDetalles() != null && !ticket.getDetalles().isEmpty()) {
             ticketDetalleRepository.deleteAll(ticket.getDetalles());
             log.info("Eliminados {} detalles del ticket {}", ticket.getDetalles().size(), ticketId);
         }
 
-        // ✅ DEVOLVER STOCK DE PRODUCTOS SI ES NECESARIO
+        // DEVOLVER STOCK DE PRODUCTOS SI ES NECESARIO
         if (ticket.getDetalles() != null) {
             for (TicketDetalle detalle : ticket.getDetalles()) {
                 if (("Venta".equals(detalle.getTipoUso()) || "Uso".equals(detalle.getTipoUso())) &&
@@ -373,10 +373,10 @@ public class CitaService {
             }
         }
 
-        // ✅ ELIMINAR PRÉSTAMOS ASOCIADOS (si existen)
+        // ELIMINAR PRESTAMOS ASOCIADOS (si existen)
         if (ticket.getPrestamos() != null && !ticket.getPrestamos().isEmpty()) {
             prestamoMaterialRepository.deleteAll(ticket.getPrestamos());
-            log.info("Eliminados {} préstamos asociados al ticket {}", ticket.getPrestamos().size(), ticketId);
+            log.info("Eliminados {} prestamos asociados al ticket {}", ticket.getPrestamos().size(), ticketId);
         }
 
         //ELIMINAR COMPROBANTES ASOCIADOS (si existen)
@@ -384,9 +384,9 @@ public class CitaService {
 
         ticketRepository.delete(ticket);
 
-        log.info("✅ Cita eliminada completamente: {} - Folio: {}", ticketId, ticket.getFolio());
+        log.info("Cita eliminada completamente: {} - Folio: {}", ticketId, ticket.getFolio());
 
-        // ✅ NOTIFICAR ELIMINACIÓN
+        // NOTIFICAR ELIMINACION
         notificacionService.notificarCitaEliminada(
                 ticket.getPaciente().getUsuarioId(),
                 ticketId,
@@ -433,7 +433,7 @@ public class CitaService {
     }
 
     /**
-     * ✅ CALCULAR MONTO AUTOMÁTICAMENTE según la lógica requerida por frontend
+     * CALCULAR MONTO AUTOMATICAMENTE segun la logica requerida por frontend
      * Lógica: Si montoPagado es 0 o null, calcular automáticamente basado en
      * duración y costo del espacio
      */
@@ -445,7 +445,7 @@ public class CitaService {
             return crearCitaDTO.getMontoPagado();
         }
 
-        // ✅ CALCULAR AUTOMÁTICAMENTE basado en duración y costo por hora del espacio
+        // CALCULAR AUTOMATICAMENTE basado en duracion y costo por hora del espacio
         BigDecimal costoPorHora = espacio.getCostoPorHora();
 
         // Validar que el espacio tenga costo configurado
@@ -462,14 +462,14 @@ public class CitaService {
         // Redondear a 2 decimales
         montoCalculado = montoCalculado.setScale(2, RoundingMode.HALF_UP);
 
-        log.info("Monto calculado automáticamente: {} (costo/hora) * {} horas = {}",
+        log.info("Monto calculado automaticamente: {} (costo/hora) * {} horas = {}",
                 costoPorHora, String.format("%.2f", horas), montoCalculado);
 
         return montoCalculado;
     }
 
     /**
-     * ✅ VALIDAR QUE EL PACIENTE NO TENGA OTRA CITA EN EL MISMO HORARIO
+     * VALIDAR QUE EL PACIENTE NO TENGA OTRA CITA EN EL MISMO HORARIO
      */
     private void validarDisponibilidadPaciente(Long pacienteId, LocalDateTime fechaInicio,
             Integer duracion, Long ticketIdExcluir) {
@@ -488,7 +488,7 @@ public class CitaService {
     }
 
     /**
-     * ✅ VALIDAR QUE EL TERAPEUTA NO TENGA OTRA CITA EN EL MISMO HORARIO
+     * VALIDAR QUE EL TERAPEUTA NO TENGA OTRA CITA EN EL MISMO HORARIO
      */
     private void validarDisponibilidadTerapeuta(Long terapeutaId, LocalDateTime fechaInicio,
             Integer duracion, Long ticketIdExcluir) {
@@ -507,7 +507,7 @@ public class CitaService {
     }
 
     /**
-     * ✅ CALCULAR COSTO POR DURACIÓN
+     * CALCULAR COSTO POR DURACION
      * Calcula el costo basado en la duración en minutos y el costo por hora
      */
     private BigDecimal calcularCostoPorDuracion(Integer duracionMinutos, BigDecimal costoPorHora) {

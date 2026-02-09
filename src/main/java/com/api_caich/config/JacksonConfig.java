@@ -15,10 +15,10 @@ public class JacksonConfig {
     public ObjectMapper objectMapper() {
         ObjectMapper mapper = new ObjectMapper();
         
-        // ✅ Registrar el módulo para Java 8 Date/Time
+        // Registrar el modulo para Java 8 Date/Time
         mapper.registerModule(new JavaTimeModule());
         
-        // ✅ Prevenir que las fechas se serialicen como timestamps
+        // Prevenir que las fechas se serialicen como timestamps
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         
         return mapper;

@@ -130,7 +130,7 @@ public class ConfiguracionHorariosService {
 
         List<ConfiguracionEspacioHorario> savedConfiguraciones = configuracionRepository.saveAll(nuevasConfiguraciones);
 
-        log.info("Configuración de horarios guardada para espacio: {} fecha: {} - {} horas deshabilitadas",
+        log.info("Configuracion de horarios guardada para espacio: {} fecha: {} - {} horas deshabilitadas",
                 espacio.getNombre(), configuracionDTO.getFecha(), configuracionDTO.getHorasDeshabilitadas().size());
 
         // Auditoría
@@ -154,7 +154,7 @@ public class ConfiguracionHorariosService {
                 .orElseThrow(() -> new ResourceNotFoundException("Configuración no encontrada"));
 
         configuracionRepository.delete(configuracion);
-        log.info("Configuración de horarios eliminada: {}", configId);
+        log.info("Configuracion de horarios eliminada: {}", configId);
     }
 
     @Transactional

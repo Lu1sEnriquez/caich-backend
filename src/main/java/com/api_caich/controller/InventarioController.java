@@ -3,6 +3,7 @@ package com.api_caich.controller;
 import com.api_caich.dto.BaseResponseDTO;
 import com.api_caich.dto.DataResponseDTO;
 import com.api_caich.entity.Producto;
+import com.api_caich.security.CustomUserDetails;
 import com.api_caich.service.InventarioService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -10,7 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -32,9 +33,9 @@ public class InventarioController {
             @RequestParam Integer cantidad,
             @RequestParam String motivo,
             @RequestParam String referencia,
-            Authentication authentication) {
+            @AuthenticationPrincipal CustomUserDetails authentication) {
 
-        Long usuarioId = Long.parseLong(authentication.getName());
+        Long usuarioId = authentication.getId();
         inventarioService.reducirStock(productoId, cantidad, motivo, referencia, usuarioId);
 
         return ResponseEntity.ok(BaseResponseDTO.success("Stock reduced successfully"));
@@ -48,9 +49,9 @@ public class InventarioController {
             @RequestParam Integer cantidad,
             @RequestParam String motivo,
             @RequestParam String referencia,
-            Authentication authentication) {
+            @AuthenticationPrincipal CustomUserDetails authentication) {
 
-        Long usuarioId = Long.parseLong(authentication.getName());
+        Long usuarioId = authentication.getId();
         inventarioService.incrementarStock(productoId, cantidad, motivo, referencia, usuarioId);
 
         return ResponseEntity.ok(BaseResponseDTO.success("Stock increased successfully"));
@@ -63,9 +64,9 @@ public class InventarioController {
             @PathVariable Long productoId,
             @RequestParam Integer nuevoStock,
             @RequestParam String motivo,
-            Authentication authentication) {
+            @AuthenticationPrincipal CustomUserDetails authentication) {
 
-        Long usuarioId = Long.parseLong(authentication.getName());
+        Long usuarioId = authentication.getId();
         inventarioService.ajustarStock(productoId, nuevoStock, motivo, usuarioId);
 
         return ResponseEntity.ok(BaseResponseDTO.success("Stock adjusted successfully"));

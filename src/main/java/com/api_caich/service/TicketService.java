@@ -336,6 +336,64 @@ public class TicketService {
         return tickets.map(this::mapToDTO);
     }
 
+    @Transactional
+    public void cancelarTicket(Long ticketId, String motivo, Long usuarioId) {
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new ResourceNotFoundException("Ticket no encontrado"));
+
+        // Validar que el ticket se pueda cancelar
+        if (!"Agendado".equals(ticket.getEstadoTicket())) {
+            throw new BusinessException("Solo se pueden cancelar tickets en estado 'Agendado'. Estado actual: " + ticket.getEstadoTicket());
+        }
+
+        // Actualizar estado
+        ticket.setEstadoTicket("Cancelado");
+        
+        // Agregar motivo a las notas
+        String nota = "[Cancelación] " + LocalDateTime.now() + " - " + motivo;
+        ticket.setNotas(ticket.getNotas() != null 
+            ? ticket.getNotas() + "\n" + nota 
+            : nota);
+
+        // Devolver stock de productos si es necesario
+        List<TicketDetalle> detalles = ticketDetalleRepository.findByTicketTicketId(ticketId);
+        for (TicketDetalle detalle : detalles) {
+            if ("Venta".equals(detalle.getTipoUso()) || "Uso".equals(detalle.getTipoUso())) {
+                inventarioService.incrementarStock(
+                    detalle.getProducto().getProductoId(),
+                    detalle.getCantidad(),
+                    "Devolución por cancelación de ticket: " + ticket.getFolio(),
+                    "TICKET_CANCEL_" + ticket.getTicketId(),
+                    usuarioId
+                );
+            }
+        }
+
+        ticketRepository.save(ticket);
+
+        // Notificar cancelación
+        notificacionService.notificarCancelacionCita(
+            ticket.getPaciente().getUsuarioId(),
+            ticketId,
+            ticket.getFolio(),
+            motivo
+        );
+
+        // Registrar auditoría
+        auditoriaService.registrarCambio(
+            "Tickets",
+            ticketId,
+            "Cancelar",
+            "Cancelación de ticket - Motivo: " + motivo,
+            ticket.getEstadoTicket(),
+            "Cancelado",
+            usuarioId,
+            "SYSTEM"
+        );
+
+        log.info("Ticket {} cancelado. Motivo: {}", ticket.getFolio(), motivo);
+    }
+
     private TicketFiltroDTO mapToFiltroDTO(Ticket ticket) {
         return TicketFiltroDTO.builder()
                 .ticketId(ticket.getTicketId())
