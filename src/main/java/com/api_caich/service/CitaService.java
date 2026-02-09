@@ -36,6 +36,7 @@ public class CitaService {
     private final NotificacionService notificacionService;
     private final PrestamoMaterialRepository prestamoMaterialRepository;
     private final ComprobanteService comprobanteService;
+    private final FolioGenerator folioGenerator;
 
     public List<CitaDTO> obtenerCitasConFiltros(Long espacioId, Long terapeutaId, Long pacienteId, String estado) {
         // Usar Pageable.unpaged() para obtener todos los resultados sin paginación
@@ -126,7 +127,7 @@ public class CitaService {
                 crearCitaDTO.getDuracion(), null);
 
         // Generar folio único
-        String folio = FolioGenerator.generarFolioTicket();
+        String folio = folioGenerator.generarFolioTicket();
 
         // CALCULAR MONTO AUTOMÁTICAMENTE según la lógica requerida por frontend
         BigDecimal montoCalculado = calcularMontoCita(crearCitaDTO, espacio);

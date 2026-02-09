@@ -36,6 +36,7 @@ public class TicketService {
     private final InventarioService inventarioService;
     private final NotificacionService notificacionService;
     private final AuditoriaService auditoriaService;
+    private final FolioGenerator folioGenerator;
 
     @Transactional
     public TicketDTO crearTicketCompleto(CrearTicketDTO ticketDTO, Long usuarioId) {
@@ -69,7 +70,7 @@ public class TicketService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario creador not found"));
 
         // Generar folio único
-        String folio = FolioGenerator.generarFolioTicket();
+        String folio = folioGenerator.generarFolioTicket();
 
         // Calcular costo materiales
         BigDecimal costoMateriales = calcularCostoMateriales(ticketDTO.getProductos());

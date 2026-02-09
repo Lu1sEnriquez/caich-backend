@@ -135,4 +135,11 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
                                              @Param("fechaInicio") LocalDateTime fechaInicio,
                                              @Param("fechaFin") LocalDateTime fechaFin,
                                              @Param("ticketIdExcluir") Long ticketIdExcluir);
+
+
+    @Query(value = "SELECT ISNULL(MAX(CAST(RIGHT(Folio, 4) AS INT)), 0) " +
+            "FROM Tickets " +
+            "WHERE Folio LIKE 'TKT-' + FORMAT(GETDATE(), 'yyyyMM') + '-%'",
+            nativeQuery = true)
+    int findMaxSequenceForCurrentMonth();
 }
