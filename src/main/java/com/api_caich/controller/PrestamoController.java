@@ -19,7 +19,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -79,9 +78,9 @@ public class PrestamoController {
     public ResponseEntity<BaseResponseDTO> marcarComoPerdido(
             @PathVariable Long prestamoId,
             @RequestParam String observaciones,
-            Authentication authentication) {
+            @AuthenticationPrincipal CustomUserDetails authentication) {
 
-        Long usuarioId = Long.parseLong(authentication.getName());
+        Long usuarioId = authentication.getId();
         prestamoService.marcarComoPerdido(prestamoId, observaciones, usuarioId);
 
         return ResponseEntity.ok(BaseResponseDTO.success("Loan marked as lost"));

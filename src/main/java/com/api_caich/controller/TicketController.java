@@ -27,7 +27,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -63,9 +62,9 @@ public class TicketController {
             @RequestParam(required = false) String estadoTicket,
             @RequestParam(required = false) String estadoPago,
             @RequestParam(required = false) String notas,
-            Authentication authentication) {
+            @AuthenticationPrincipal CustomUserDetails authentication) {
 
-        Long usuarioId = Long.parseLong(authentication.getName());
+        Long usuarioId = authentication.getId();
         TicketDTO ticket = ticketService.actualizarEstado(ticketId, estadoTicket, estadoPago, notas, usuarioId);
 
         return ResponseEntity.ok(DataResponseDTO.success(ticket, "Ticket status updated successfully"));
@@ -79,7 +78,9 @@ public class TicketController {
             @RequestParam String motivo,
             @AuthenticationPrincipal CustomUserDetails authentication) {
 
-        // TODO:Implementation for ticket cancellation
+        Long usuarioId = authentication.getId();
+        ticketService.cancelarTicket(ticketId, motivo, usuarioId);
+        
         return ResponseEntity.ok(BaseResponseDTO.success("Ticket cancelled successfully"));
     }
 

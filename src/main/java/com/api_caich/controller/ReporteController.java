@@ -26,7 +26,7 @@ public class ReporteController {
     private final ReporteService reporteService;
 
     @GetMapping("/dashboard")
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get admin dashboard", description = "Get statistics for admin dashboard")
     public ResponseEntity<DataResponseDTO<DashboardAdminDTO>> obtenerDashboardAdmin() {
         DashboardAdminDTO dashboard = reporteService.obtenerEstadisticasAdmin();

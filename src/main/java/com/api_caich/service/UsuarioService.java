@@ -2,6 +2,7 @@ package com.api_caich.service;
 
 import com.api_caich.dto.usuario.*;
 import com.api_caich.entity.Usuario;
+import com.api_caich.enums.EstadoUsuario;
 import com.api_caich.enums.Role;
 import com.api_caich.exception.BusinessException;
 import com.api_caich.exception.ResourceNotFoundException;
@@ -105,7 +106,7 @@ public class UsuarioService {
         usuario.setPasswordHash(passwordEncoder.encode(crearUsuarioDTO.getPassword()));
         usuario.setTelefono(crearUsuarioDTO.getTelefono());
         usuario.setRol(role.getNombre());
-        usuario.setEstado("Activo");
+        usuario.setEstado(EstadoUsuario.ACTIVO.getValor());
         usuario.setFoto(crearUsuarioDTO.getFoto());
         usuario.setFechaCreacion(LocalDateTime.now());
 
@@ -227,7 +228,7 @@ public class UsuarioService {
         usuario.setPasswordHash(passwordEncoder.encode(cambiarPasswordDTO.getNewPassword()));
         usuarioRepository.save(usuario);
 
-        log.info("Contraseña cambiada para usuario: {}", usuario.getEmail());
+        log.info("Contrasena cambiada para usuario: {}", usuario.getEmail());
 
         // Auditoría
         auditoriaService.registrarCambio("Usuarios", usuarioId, "Actualizar",
@@ -331,8 +332,8 @@ public class UsuarioService {
     }
 
     private void validarEstado(String estado) {
-        if (!List.of("Activo", "Suspendido", "Inactivo").contains(estado)) {
-            throw new BusinessException("Estado no válido: " + estado);
+        if (!EstadoUsuario.isValid(estado)) {
+            throw new BusinessException("Estado no válido: " + estado + ". Valores permitidos: " + String.join(", ", EstadoUsuario.getValores()));
         }
     }
 

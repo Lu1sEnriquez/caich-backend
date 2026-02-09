@@ -257,7 +257,7 @@ public class PrestamoService {
 
         prestamoRepository.delete(prestamo);
 
-        log.info("Préstamo eliminado: {} por usuario: {}", prestamoId, usuarioId);
+        log.info("Prestamo eliminado: {} por usuario: {}", prestamoId, usuarioId);
 
         // Auditoría
         auditoriaService.registrarCambio("PrestamosMateriales", prestamoId, "Eliminar",

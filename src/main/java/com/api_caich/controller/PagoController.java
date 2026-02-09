@@ -25,7 +25,7 @@ public class PagoController {
     private final PagoService pagoService;
 
     @PostMapping("/registrar-propio")
-    // @PreAuthorize("hasRole('PACIENTE')")
+    @PreAuthorize("hasRole('PACIENTE')")
     @Operation(summary = "Register own payment", description = "Register payment for patient's own ticket")
     public ResponseEntity<DataResponseDTO<TicketDTO>> registrarPagoPropio(
             @Valid @RequestBody RegistrarPagoDTO registrarPagoDTO,
