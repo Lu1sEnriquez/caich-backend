@@ -50,18 +50,18 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
         @Query("SELECT COUNT(t) FROM Ticket t WHERE FUNCTION('YEAR', t.fecha) = FUNCTION('YEAR', CURRENT_DATE) AND FUNCTION('MONTH', t.fecha) = FUNCTION('MONTH', CURRENT_DATE)")
         Long countTicketsEsteMes();
 
-        @Query("""
-                            SELECT COUNT(t) FROM Ticket t
-                            WHERE t.espacio.espacioId = :espacioId
-                            AND t.estadoTicket != 'Cancelado'
-                            AND t.fecha < :fechaFin
-                            AND FUNCTION('DATEADD', MINUTE, t.duracion, t.fecha) > :fechaInicio
-                            AND (:ticketId IS NULL OR t.ticketId != :ticketId)
-                        """)
-        Long countConflictingTickets(@Param("espacioId") Long espacioId,
-                        @Param("fechaInicio") LocalDateTime fechaInicio,
-                        @Param("fechaFin") LocalDateTime fechaFin,
-                        @Param("ticketId") Long ticketId);
+    @Query("""
+    SELECT COUNT(t) FROM Ticket t
+    WHERE t.espacio.espacioId = :espacioId
+    AND t.estadoTicket NOT IN ('Cancelado', 'NoAsistio')
+    AND t.fecha < :fechaFin
+    AND DATEADD(MINUTE, t.duracion, t.fecha) > :fechaInicio
+    AND (:ticketId IS NULL OR t.ticketId != :ticketId)
+""")
+    Long countConflictingTickets(@Param("espacioId") Long espacioId,
+                                 @Param("fechaInicio") LocalDateTime fechaInicio,
+                                 @Param("fechaFin") LocalDateTime fechaFin,
+                                 @Param("ticketId") Long ticketId);
 
         @Query("SELECT t FROM Ticket t " +
                         "JOIN FETCH t.paciente p " +
@@ -110,29 +110,29 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
          * Contar citas conflictivas para un paciente en un horario específico
          */
         @Query("SELECT COUNT(t) FROM Ticket t WHERE " +
-                        "t.paciente.usuarioId = :pacienteId AND " +
-                        "t.estadoTicket NOT IN ('Cancelado', 'NoAsistio') AND " +
-                        "((t.fecha BETWEEN :fechaInicio AND :fechaFin) OR " +
-                        "(DATEADD(MINUTE, t.duracion, t.fecha) BETWEEN :fechaInicio AND :fechaFin) OR " +
-                        "(t.fecha <= :fechaInicio AND DATEADD(MINUTE, t.duracion, t.fecha) >= :fechaFin)) AND " +
-                        "(:ticketIdExcluir IS NULL OR t.ticketId != :ticketIdExcluir)")
+                "t.paciente.usuarioId = :pacienteId AND " +
+                "t.estadoTicket NOT IN ('Cancelado', 'NoAsistio') AND " +
+                // Si la cita existente empieza antes de que la nueva termine
+                "t.fecha < :fechaFin AND " +
+                // Y la cita existente termina después de que la nueva empiece
+                "DATEADD(MINUTE, t.duracion, t.fecha) > :fechaInicio AND " +
+                "(:ticketIdExcluir IS NULL OR t.ticketId != :ticketIdExcluir)")
         Long countConflictingTicketsForPaciente(@Param("pacienteId") Long pacienteId,
                         @Param("fechaInicio") LocalDateTime fechaInicio,
                         @Param("fechaFin") LocalDateTime fechaFin,
                         @Param("ticketIdExcluir") Long ticketIdExcluir);
 
-        /**
-         * Contar citas conflictivas para un terapeuta en un horario específico
-         */
-        @Query("SELECT COUNT(t) FROM Ticket t WHERE " +
-                        "t.terapeuta.usuarioId = :terapeutaId AND " +
-                        "t.estadoTicket NOT IN ('Cancelado', 'NoAsistio') AND " +
-                        "((t.fecha BETWEEN :fechaInicio AND :fechaFin) OR " +
-                        "(DATEADD(MINUTE, t.duracion, t.fecha) BETWEEN :fechaInicio AND :fechaFin) OR " +
-                        "(t.fecha <= :fechaInicio AND DATEADD(MINUTE, t.duracion, t.fecha) >= :fechaFin)) AND " +
-                        "(:ticketIdExcluir IS NULL OR t.ticketId != :ticketIdExcluir)")
-        Long countConflictingTicketsForTerapeuta(@Param("terapeutaId") Long terapeutaId,
-                        @Param("fechaInicio") LocalDateTime fechaInicio,
-                        @Param("fechaFin") LocalDateTime fechaFin,
-                        @Param("ticketIdExcluir") Long ticketIdExcluir);
+    /**
+     * Contar citas conflictivas para un terapeuta en un horario específico
+     */
+    @Query("SELECT COUNT(t) FROM Ticket t WHERE " +
+            "t.terapeuta.usuarioId = :terapeutaId AND " +
+            "t.estadoTicket NOT IN ('Cancelado', 'NoAsistio') AND " +
+            "t.fecha < :fechaFin AND " +
+            "DATEADD(MINUTE, t.duracion, t.fecha) > :fechaInicio AND " +
+            "(:ticketIdExcluir IS NULL OR t.ticketId != :ticketIdExcluir)")
+    Long countConflictingTicketsForTerapeuta(@Param("terapeutaId") Long terapeutaId,
+                                             @Param("fechaInicio") LocalDateTime fechaInicio,
+                                             @Param("fechaFin") LocalDateTime fechaFin,
+                                             @Param("ticketIdExcluir") Long ticketIdExcluir);
 }
