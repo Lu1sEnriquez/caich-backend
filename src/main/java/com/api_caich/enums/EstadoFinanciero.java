@@ -1,0 +1,9 @@
+package com.api_caich.enums;
+
+public enum EstadoFinanciero {
+    PENDIENTE, // Saldo pendiente total
+    PAGO_PARCIAL, // Abonaron algo
+    EN_REVISION, // Subieron comprobante, falta validar
+    PAGADO, // Saldo cubierto al 100%
+    REEMBOLSADO     // Se devolvió el dinero
+}

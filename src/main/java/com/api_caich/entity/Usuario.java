@@ -1,11 +1,17 @@
 package com.api_caich.entity;
 
-import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
-
 import java.time.LocalDateTime;
 import java.util.List;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 @Setter
@@ -48,12 +54,18 @@ public class Usuario extends BaseEntity {
     @Column(name = "UltimaConexion")
     private LocalDateTime ultimaConexion;
 
-    @OneToMany(mappedBy = "paciente")
-    private List<Ticket> ticketsPaciente;
-
-    @OneToMany(mappedBy = "terapeuta")
-    private List<Ticket> ticketsTerapeuta;
-
+    // Relaciones con Tickets
     @OneToMany(mappedBy = "creadoPor")
     private List<Ticket> ticketsCreados;
+
+    // Relaciones con Citas (como paciente o terapeuta)
+    @OneToMany(mappedBy = "paciente")
+    private List<TicketCita> citasComoPaciente;
+
+    @OneToMany(mappedBy = "terapeuta")
+    private List<TicketCita> citasComoTerapeuta;
+
+    // Relaciones con Préstamos
+    @OneToMany(mappedBy = "responsable")
+    private List<TicketPrestamo> prestamosResponsable;
 }

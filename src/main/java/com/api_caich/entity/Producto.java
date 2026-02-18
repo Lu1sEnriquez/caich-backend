@@ -63,22 +63,19 @@ public class Producto extends BaseEntity {
     private Boolean estaActivo = true;
 
     // --- RELACIONES CORREGIDAS ---
-
+    // Nota: TicketDetalle y PrestamoMaterial han sido removidas en favor de la nueva arquitectura modular
+    // TicketVenta y TicketPrestamo ahora manejan las relaciones con Producto
     @OneToMany(mappedBy = "producto")
-    @JsonIgnore // <--- 2. ESTO EVITA EL BUCLE INFINITO
-    private List<TicketDetalle> ticketDetalles;
-
-    @OneToMany(mappedBy = "producto")
-    @JsonIgnore // <--- 3. AGREGA ESTO
-    private List<PrestamoMaterial> prestamos;
-
-    @OneToMany(mappedBy = "producto")
-    @JsonIgnore // <--- 4. AGREGA ESTO
+    @JsonIgnore
     private List<MovimientoInventario> movimientos;
 
     public String getEstadoStock() {
-        if (this.stock <= 0) return "AGOTADO";
-        if (this.stock <= this.stockMinimo) return "CRÍTICO";
+        if (this.stock <= 0) {
+            return "AGOTADO";
+        }
+        if (this.stock <= this.stockMinimo) {
+            return "CRÍTICO";
+        }
         return "OK";
     }
 }

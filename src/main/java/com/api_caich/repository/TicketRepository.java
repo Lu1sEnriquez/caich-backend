@@ -1,6 +1,8 @@
 package com.api_caich.repository;
 
-import com.api_caich.entity.Ticket;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -9,137 +11,161 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
+import com.api_caich.entity.Ticket;
+import com.api_caich.enums.EstadoFinanciero;
+import com.api_caich.enums.EstadoTicket;
 
+/**
+ * Repositorio para Ticket con arquitectura modular
+ */
 @Repository
 public interface TicketRepository extends JpaRepository<Ticket, Long> {
 
-        Optional<Ticket> findByFolio(String folio);
-
-        List<Ticket> findByPacienteUsuarioId(Long pacienteId);
-
-        List<Ticket> findByTerapeutaUsuarioId(Long terapeutaId);
-
-        List<Ticket> findByEspacioEspacioId(Long espacioId);
-
-        Page<Ticket> findByPacienteUsuarioId(Long pacienteId, Pageable pageable);
-
-        List<Ticket> findByEstadoTicket(String estadoTicket);
-
-        List<Ticket> findByPacienteUsuarioIdAndEstadoTicket(Long pacienteId, String estadoTicket);
-
-        List<Ticket> findByTerapeutaUsuarioIdAndEstadoTicket(Long terapeutaId, String estadoTicket);
-
-        @Query("SELECT t FROM Ticket t WHERE t.fecha BETWEEN :start AND :end")
-        List<Ticket> findByFechaBetween(@Param("start") LocalDateTime start,
-                        @Param("end") LocalDateTime end);
-
-        // @Query("SELECT t FROM Ticket t WHERE t.estadoTicket = :estado")
-        // List<Ticket> findByEstadoTicket(@Param("estado") String estadoTicket);
-
-        @Query("SELECT t FROM Ticket t WHERE t.estadoPago = :estadoPago")
-        List<Ticket> findByEstadoPago(@Param("estadoPago") String estadoPago);
-
-        @Query(value = "SELECT COUNT(*) FROM Tickets WHERE CAST(Fecha AS DATE) = CAST(GETDATE() AS DATE)", nativeQuery = true)
-        Long countTicketsHoy();
-
-        // @Query("SELECT COUNT(t) FROM Ticket t WHERE YEAR(t.fecha) =
-        // YEAR(CURRENT_DATE) AND MONTH(t.fecha) = MONTH(CURRENT_DATE)")
-        @Query("SELECT COUNT(t) FROM Ticket t WHERE FUNCTION('YEAR', t.fecha) = FUNCTION('YEAR', CURRENT_DATE) AND FUNCTION('MONTH', t.fecha) = FUNCTION('MONTH', CURRENT_DATE)")
-        Long countTicketsEsteMes();
-
-    @Query("""
-    SELECT COUNT(t) FROM Ticket t
-    WHERE t.espacio.espacioId = :espacioId
-    AND t.estadoTicket NOT IN ('Cancelado', 'NoAsistio')
-    AND t.fecha < :fechaFin
-    AND DATEADD(MINUTE, t.duracion, t.fecha) > :fechaInicio
-    AND (:ticketId IS NULL OR t.ticketId != :ticketId)
-""")
-    Long countConflictingTickets(@Param("espacioId") Long espacioId,
-                                 @Param("fechaInicio") LocalDateTime fechaInicio,
-                                 @Param("fechaFin") LocalDateTime fechaFin,
-                                 @Param("ticketId") Long ticketId);
-
-        @Query("SELECT t FROM Ticket t " +
-                        "JOIN FETCH t.paciente p " +
-                        "JOIN FETCH t.terapeuta ter " +
-                        "LEFT JOIN FETCH t.espacio e " +
-                        "WHERE (:pacienteId IS NULL OR t.paciente.usuarioId = :pacienteId) " +
-                        "AND (:terapeutaId IS NULL OR t.terapeuta.usuarioId = :terapeutaId) " +
-                        "AND (:estadoTicket IS NULL OR t.estadoTicket = :estadoTicket) " +
-                        "AND (:estadoPago IS NULL OR t.estadoPago = :estadoPago) " +
-                        "AND (:fechaInicio IS NULL OR t.fecha >= :fechaInicio) " +
-                        "AND (:fechaFin IS NULL OR t.fecha <= :fechaFin)")
-        Page<Ticket> findWithFilters(
-                        @Param("pacienteId") Long pacienteId,
-                        @Param("terapeutaId") Long terapeutaId,
-                        @Param("estadoTicket") String estadoTicket,
-                        @Param("estadoPago") String estadoPago,
-                        @Param("fechaInicio") LocalDateTime fechaInicio,
-                        @Param("fechaFin") LocalDateTime fechaFin,
-                        Pageable pageable);
-
-        @Query("SELECT t FROM Ticket t " +
-                        "WHERE t.paciente.usuarioId = :pacienteId " +
-                        "AND (:estadoTicket IS NULL OR t.estadoTicket = :estadoTicket) " +
-                        "AND (:fechaInicio IS NULL OR t.fecha >= :fechaInicio) " +
-                        "AND (:fechaFin IS NULL OR t.fecha <= :fechaFin)")
-        Page<Ticket> findByPacienteWithFilters(
-                        @Param("pacienteId") Long pacienteId,
-                        @Param("estadoTicket") String estadoTicket,
-                        @Param("fechaInicio") LocalDateTime fechaInicio,
-                        @Param("fechaFin") LocalDateTime fechaFin,
-                        Pageable pageable);
-
-        @Query("SELECT t FROM Ticket t " +
-                        "WHERE t.terapeuta.usuarioId = :terapeutaId " +
-                        "AND (:estadoTicket IS NULL OR t.estadoTicket = :estadoTicket) " +
-                        "AND (:fechaInicio IS NULL OR t.fecha >= :fechaInicio) " +
-                        "AND (:fechaFin IS NULL OR t.fecha <= :fechaFin)")
-        Page<Ticket> findByTerapeutaWithFilters(
-                        @Param("terapeutaId") Long terapeutaId,
-                        @Param("estadoTicket") String estadoTicket,
-                        @Param("fechaInicio") LocalDateTime fechaInicio,
-                        @Param("fechaFin") LocalDateTime fechaFin,
-                        Pageable pageable);
-
-        /**
-         * Contar citas conflictivas para un paciente en un horario específico
-         */
-        @Query("SELECT COUNT(t) FROM Ticket t WHERE " +
-                "t.paciente.usuarioId = :pacienteId AND " +
-                "t.estadoTicket NOT IN ('Cancelado', 'NoAsistio') AND " +
-                // Si la cita existente empieza antes de que la nueva termine
-                "t.fecha < :fechaFin AND " +
-                // Y la cita existente termina después de que la nueva empiece
-                "DATEADD(MINUTE, t.duracion, t.fecha) > :fechaInicio AND " +
-                "(:ticketIdExcluir IS NULL OR t.ticketId != :ticketIdExcluir)")
-        Long countConflictingTicketsForPaciente(@Param("pacienteId") Long pacienteId,
-                        @Param("fechaInicio") LocalDateTime fechaInicio,
-                        @Param("fechaFin") LocalDateTime fechaFin,
-                        @Param("ticketIdExcluir") Long ticketIdExcluir);
+    // ========== QUERIES BÁSICAS ==========
+    /**
+     * Buscar ticket por folio único
+     */
+    Optional<Ticket> findByFolio(String folio);
 
     /**
-     * Contar citas conflictivas para un terapeuta en un horario específico
+     * Buscar tickets creados por un usuario específico
      */
-    @Query("SELECT COUNT(t) FROM Ticket t WHERE " +
-            "t.terapeuta.usuarioId = :terapeutaId AND " +
-            "t.estadoTicket NOT IN ('Cancelado', 'NoAsistio') AND " +
-            "t.fecha < :fechaFin AND " +
-            "DATEADD(MINUTE, t.duracion, t.fecha) > :fechaInicio AND " +
-            "(:ticketIdExcluir IS NULL OR t.ticketId != :ticketIdExcluir)")
-    Long countConflictingTicketsForTerapeuta(@Param("terapeutaId") Long terapeutaId,
-                                             @Param("fechaInicio") LocalDateTime fechaInicio,
-                                             @Param("fechaFin") LocalDateTime fechaFin,
-                                             @Param("ticketIdExcluir") Long ticketIdExcluir);
+    List<Ticket> findByCreadoPorUsuarioId(Long creadoPorId);
 
+    /**
+     * Buscar tickets por estado (enum)
+     */
+    List<Ticket> findByEstadoTicket(EstadoTicket estadoTicket);
 
-    @Query(value = "SELECT ISNULL(MAX(CAST(RIGHT(Folio, 4) AS INT)), 0) " +
-            "FROM Tickets " +
-            "WHERE Folio LIKE 'TKT-' + FORMAT(GETDATE(), 'yyyyMM') + '-%'",
+    /**
+     * Buscar tickets por estado financiero (enum)
+     */
+    List<Ticket> findByEstadoFinanciero(EstadoFinanciero estadoFinanciero);
+
+    // ========== QUERIES CON PAGINACIÓN ==========
+    /**
+     * Buscar tickets por creador con paginación
+     */
+    Page<Ticket> findByCreadoPorUsuarioId(Long creadoPorId, Pageable pageable);
+
+    // ========== QUERIES DE REPORTES Y CONTADORES ==========
+    /**
+     * Contar tickets creados hoy
+     */
+    @Query(value = "SELECT COUNT(*) FROM Tickets WHERE CAST(FechaCreacion AS DATE) = CAST(GETDATE() AS DATE)", nativeQuery = true)
+    Long countTicketsHoy();
+
+    /**
+     * Contar tickets creados este mes
+     */
+    @Query("SELECT COUNT(t) FROM Ticket t WHERE FUNCTION('YEAR', t.fechaCreacion) = FUNCTION('YEAR', CURRENT_DATE) AND FUNCTION('MONTH', t.fechaCreacion) = FUNCTION('MONTH', CURRENT_DATE)")
+    Long countTicketsEsteMes();
+
+    /**
+     * Buscar tickets por rango de fechas de creación
+     */
+    @Query("SELECT t FROM Ticket t WHERE t.fechaCreacion BETWEEN :start AND :end")
+    List<Ticket> findByFechaCreacionBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    // ========== QUERIES CON JOINS A CITA ==========
+    /**
+     * Buscar tickets que tienen cita con un paciente específico
+     */
+    @Query("SELECT DISTINCT t FROM Ticket t LEFT JOIN t.cita c WHERE c.paciente.usuarioId = :pacienteId")
+    List<Ticket> findTicketsByPaciente(@Param("pacienteId") Long pacienteId);
+
+    /**
+     * Buscar tickets que tienen cita con un terapeuta específico
+     */
+    @Query("SELECT DISTINCT t FROM Ticket t LEFT JOIN t.cita c WHERE c.terapeuta.usuarioId = :terapeutaId")
+    List<Ticket> findTicketsByTerapeuta(@Param("terapeutaId") Long terapeutaId);
+
+    /**
+     * Buscar tickets con cita para un paciente con paginación
+     */
+    @Query("SELECT DISTINCT t FROM Ticket t LEFT JOIN t.cita c WHERE c.paciente.usuarioId = :pacienteId")
+    Page<Ticket> findTicketsByPaciente(@Param("pacienteId") Long pacienteId, Pageable pageable);
+
+    /**
+     * Buscar tickets con cita para un terapeuta con paginación
+     */
+    @Query("SELECT DISTINCT t FROM Ticket t LEFT JOIN t.cita c WHERE c.terapeuta.usuarioId = :terapeutaId")
+    Page<Ticket> findTicketsByTerapeuta(@Param("terapeutaId") Long terapeutaId, Pageable pageable);
+
+    // ========== QUERY DE FILTROS COMPLEJA ==========
+    /**
+     * Buscar tickets con múltiples filtros (Admin) Incluye filtros por
+     * paciente/terapeuta (via cita), estados, fechas
+     */
+    @Query("""
+        SELECT DISTINCT t FROM Ticket t 
+        LEFT JOIN t.cita c 
+        WHERE (:estadoTicket IS NULL OR t.estadoTicket = :estadoTicket)
+        AND (:estadoFinanciero IS NULL OR t.estadoFinanciero = :estadoFinanciero)
+        AND (:pacienteId IS NULL OR c.paciente.usuarioId = :pacienteId)
+        AND (:terapeutaId IS NULL OR c.terapeuta.usuarioId = :terapeutaId)
+        AND (:fechaInicio IS NULL OR t.fechaCreacion >= :fechaInicio)
+        AND (:fechaFin IS NULL OR t.fechaCreacion <= :fechaFin)
+        ORDER BY t.fechaCreacion DESC
+    """)
+    Page<Ticket> findWithFilters(
+            @Param("pacienteId") Long pacienteId,
+            @Param("terapeutaId") Long terapeutaId,
+            @Param("estadoTicket") EstadoTicket estadoTicket,
+            @Param("estadoFinanciero") EstadoFinanciero estadoFinanciero,
+            @Param("fechaInicio") LocalDateTime fechaInicio,
+            @Param("fechaFin") LocalDateTime fechaFin,
+            Pageable pageable
+    );
+
+    /**
+     * Buscar tickets de un paciente con filtros
+     */
+    @Query("""
+        SELECT DISTINCT t FROM Ticket t 
+        LEFT JOIN t.cita c 
+        WHERE c.paciente.usuarioId = :pacienteId
+        AND (:estadoTicket IS NULL OR t.estadoTicket = :estadoTicket)
+        AND (:fechaInicio IS NULL OR t.fechaCreacion >= :fechaInicio)
+        AND (:fechaFin IS NULL OR t.fechaCreacion <= :fechaFin)
+        ORDER BY t.fechaCreacion DESC
+    """)
+    Page<Ticket> findByPacienteWithFilters(
+            @Param("pacienteId") Long pacienteId,
+            @Param("estadoTicket") EstadoTicket estadoTicket,
+            @Param("fechaInicio") LocalDateTime fechaInicio,
+            @Param("fechaFin") LocalDateTime fechaFin,
+            Pageable pageable
+    );
+
+    /**
+     * Buscar tickets de un terapeuta con filtros
+     */
+    @Query("""
+        SELECT DISTINCT t FROM Ticket t 
+        LEFT JOIN t.cita c 
+        WHERE c.terapeuta.usuarioId = :terapeutaId
+        AND (:estadoTicket IS NULL OR t.estadoTicket = :estadoTicket)
+        AND (:fechaInicio IS NULL OR t.fechaCreacion >= :fechaInicio)
+        AND (:fechaFin IS NULL OR t.fechaCreacion <= :fechaFin)
+        ORDER BY t.fechaCreacion DESC
+    """)
+    Page<Ticket> findByTerapeutaWithFilters(
+            @Param("terapeutaId") Long terapeutaId,
+            @Param("estadoTicket") EstadoTicket estadoTicket,
+            @Param("fechaInicio") LocalDateTime fechaInicio,
+            @Param("fechaFin") LocalDateTime fechaFin,
+            Pageable pageable
+    );
+
+    // ========== GENERACIÓN DE FOLIOS ==========
+    /**
+     * Obtener el número de secuencia más alto del mes actual para generar
+     * folios
+     */
+    @Query(value = "SELECT ISNULL(MAX(CAST(RIGHT(Folio, 4) AS INT)), 0) "
+            + "FROM Tickets "
+            + "WHERE Folio LIKE 'TKT-' + FORMAT(GETDATE(), 'yyyyMM') + '-%'",
             nativeQuery = true)
     int findMaxSequenceForCurrentMonth();
 }

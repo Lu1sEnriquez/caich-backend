@@ -1,11 +1,15 @@
 package com.api_caich.entity;
 
-import jakarta.persistence.*;
+import java.math.BigDecimal;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
-
-import java.math.BigDecimal;
-import java.util.List;
 
 @Getter
 @Setter
@@ -36,6 +40,4 @@ public class Espacio extends BaseEntity {
     @Column(name = "EstaActivo", nullable = false)
     private Boolean estaActivo = true;
 
-    @OneToMany(mappedBy = "espacio")
-    private List<Ticket> tickets;
 }

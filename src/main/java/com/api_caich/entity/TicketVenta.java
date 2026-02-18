@@ -1,21 +1,28 @@
 package com.api_caich.entity;
 
-import jakarta.persistence.*;
+import java.math.BigDecimal;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
-
-import java.math.BigDecimal;
 
 @Getter
 @Setter
 @Entity
-@Table(name = "TicketDetalles")
-public class TicketDetalle extends BaseEntity {
+@Table(name = "Ticket_Ventas")
+public class TicketVenta {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "DetalleId")
-    private Long detalleId;
+    private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "TicketId", nullable = false)
@@ -26,14 +33,12 @@ public class TicketDetalle extends BaseEntity {
     private Producto producto;
 
     @Column(name = "Cantidad", nullable = false)
-    private Integer cantidad = 1;
+    private Integer cantidad;
 
+    // Snapshot: Guardamos el precio al momento de la venta
     @Column(name = "PrecioUnitario", nullable = false, precision = 10, scale = 2)
     private BigDecimal precioUnitario;
 
     @Column(name = "Subtotal", nullable = false, precision = 10, scale = 2)
     private BigDecimal subtotal;
-
-    @Column(name = "TipoUso", length = 20)
-    private String tipoUso;
 }

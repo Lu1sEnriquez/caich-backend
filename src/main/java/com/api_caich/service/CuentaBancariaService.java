@@ -1,5 +1,11 @@
 package com.api_caich.service;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.api_caich.dto.cuenta.ActualizarCuentaBancariaDTO;
 import com.api_caich.dto.cuenta.CrearCuentaBancariaDTO;
 import com.api_caich.dto.cuenta.CuentaBancariaDTO;
@@ -7,13 +13,9 @@ import com.api_caich.entity.CuentaBancaria;
 import com.api_caich.exception.BusinessException;
 import com.api_caich.exception.ResourceNotFoundException;
 import com.api_caich.repository.CuentaBancariaRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -109,8 +111,8 @@ public class CuentaBancariaService {
         String cambios = "";
 
         // Validar y actualizar número de cuenta si es diferente
-        if (actualizarCuentaDTO.getNumeroCuenta() != null &&
-                !actualizarCuentaDTO.getNumeroCuenta().equals(cuenta.getNumeroCuenta())) {
+        if (actualizarCuentaDTO.getNumeroCuenta() != null
+                && !actualizarCuentaDTO.getNumeroCuenta().equals(cuenta.getNumeroCuenta())) {
 
             if (cuentaBancariaRepository.existsByNumeroCuentaAndCuentaIdNot(actualizarCuentaDTO.getNumeroCuenta(),
                     cuentaId)) {
@@ -183,10 +185,9 @@ public class CuentaBancariaService {
                 .orElseThrow(() -> new ResourceNotFoundException("Cuenta bancaria no encontrada con ID: " + cuentaId));
 
         // Verificar si la cuenta tiene tickets relacionados
-        if (!cuenta.getTickets().isEmpty()) {
-            throw new BusinessException("No se puede eliminar la cuenta porque tiene tickets relacionados");
-        }
-
+        // if (!cuenta.getTickets().isEmpty()) {
+        //     throw new BusinessException("No se puede eliminar la cuenta porque tiene tickets relacionados");
+        // }
         cuentaBancariaRepository.delete(cuenta);
 
         log.info("Cuenta bancaria eliminada: {} - {}", cuenta.getBanco(), cuenta.getNumeroCuenta());

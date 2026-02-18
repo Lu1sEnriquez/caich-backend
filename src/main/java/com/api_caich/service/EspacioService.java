@@ -1,5 +1,11 @@
 package com.api_caich.service;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.api_caich.dto.espacio.ActualizarEspacioDTO;
 import com.api_caich.dto.espacio.CrearEspacioDTO;
 import com.api_caich.dto.espacio.EspacioDTO;
@@ -7,13 +13,9 @@ import com.api_caich.entity.Espacio;
 import com.api_caich.exception.BusinessException;
 import com.api_caich.exception.ResourceNotFoundException;
 import com.api_caich.repository.EspacioRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -95,8 +97,8 @@ public class EspacioService {
         String cambios = "";
 
         // Validar y actualizar nombre si es diferente
-        if (actualizarEspacioDTO.getNombre() != null &&
-                !actualizarEspacioDTO.getNombre().equals(espacio.getNombre())) {
+        if (actualizarEspacioDTO.getNombre() != null
+                && !actualizarEspacioDTO.getNombre().equals(espacio.getNombre())) {
 
             if (espacioRepository.existsByNombreAndEspacioIdNot(actualizarEspacioDTO.getNombre(), espacioId)) {
                 throw new BusinessException("Ya existe un espacio con el nombre: " + actualizarEspacioDTO.getNombre());
@@ -173,10 +175,9 @@ public class EspacioService {
                 .orElseThrow(() -> new ResourceNotFoundException("Espacio no encontrado con ID: " + espacioId));
 
         // Verificar si el espacio tiene tickets relacionados
-        if (!espacio.getTickets().isEmpty()) {
-            throw new BusinessException("No se puede eliminar el espacio porque tiene tickets relacionados");
-        }
-
+        // if (!espacio.getTickets().isEmpty()) {
+        //     throw new BusinessException("No se puede eliminar el espacio porque tiene tickets relacionados");
+        // }
         espacioRepository.delete(espacio);
 
         log.info("Espacio eliminado: {} - {}", espacio.getNombre(), espacio.getTipo());
@@ -198,8 +199,8 @@ public class EspacioService {
     private void validarTipoEspacio(String tipo) {
         List<String> tiposValidos = List.of("Cubículo", "Consultorio", "Sala", "Online");
         if (!tiposValidos.contains(tipo)) {
-            throw new BusinessException("Tipo de espacio no válido: " + tipo +
-                    ". Tipos válidos: " + String.join(", ", tiposValidos));
+            throw new BusinessException("Tipo de espacio no válido: " + tipo
+                    + ". Tipos válidos: " + String.join(", ", tiposValidos));
         }
     }
 

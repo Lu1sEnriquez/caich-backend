@@ -1,14 +1,9 @@
 package com.api_caich.service;
 
-import com.api_caich.dto.usuario.*;
-import com.api_caich.entity.Usuario;
-import com.api_caich.enums.EstadoUsuario;
-import com.api_caich.enums.Role;
-import com.api_caich.exception.BusinessException;
-import com.api_caich.exception.ResourceNotFoundException;
-import com.api_caich.repository.UsuarioRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,9 +11,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.stream.Collectors;
+import com.api_caich.dto.usuario.ActualizarUsuarioDTO;
+import com.api_caich.dto.usuario.CambiarEstadoDTO;
+import com.api_caich.dto.usuario.CambiarPasswordDTO;
+import com.api_caich.dto.usuario.CrearUsuarioDTO;
+import com.api_caich.dto.usuario.FotoPerfilDTO;
+import com.api_caich.dto.usuario.UsuarioDTO;
+import com.api_caich.entity.Usuario;
+import com.api_caich.enums.EstadoUsuario;
+import com.api_caich.enums.Role;
+import com.api_caich.exception.BusinessException;
+import com.api_caich.exception.ResourceNotFoundException;
+import com.api_caich.repository.UsuarioRepository;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
@@ -130,8 +137,8 @@ public class UsuarioService {
         String cambios = "";
 
         // Validar y actualizar email si es diferente
-        if (actualizarUsuarioDTO.getEmail() != null &&
-                !actualizarUsuarioDTO.getEmail().equals(usuario.getEmail())) {
+        if (actualizarUsuarioDTO.getEmail() != null
+                && !actualizarUsuarioDTO.getEmail().equals(usuario.getEmail())) {
 
             if (usuarioRepository.existsByEmailAndUsuarioIdNot(actualizarUsuarioDTO.getEmail(), usuarioId)) {
                 throw new BusinessException("El email ya está registrado: " + actualizarUsuarioDTO.getEmail());
@@ -241,9 +248,7 @@ public class UsuarioService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado con ID: " + usuarioId));
 
         // Verificar si el usuario tiene datos relacionados antes de eliminar
-        if (!usuario.getTicketsPaciente().isEmpty() ||
-                !usuario.getTicketsTerapeuta().isEmpty() ||
-                !usuario.getTicketsCreados().isEmpty()) {
+        if (!usuario.getTicketsCreados().isEmpty()) {
             throw new BusinessException("No se puede eliminar el usuario porque tiene datos relacionados");
         }
 
@@ -262,8 +267,8 @@ public class UsuarioService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         // Validar que el usuario está actualizando su propia foto o es admin
-        if (!usuarioId.equals(usuarioActualizadorId) &&
-                !Role.fromNombre(obtenerUsuarioPorId(usuarioActualizadorId).getRol()).equals(Role.ADMINISTRADOR)) {
+        if (!usuarioId.equals(usuarioActualizadorId)
+                && !Role.fromNombre(obtenerUsuarioPorId(usuarioActualizadorId).getRol()).equals(Role.ADMINISTRADOR)) {
             throw new BusinessException("No tiene permisos para actualizar la foto de este usuario");
         }
 
@@ -296,8 +301,8 @@ public class UsuarioService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         // Validar permisos
-        if (!usuarioId.equals(usuarioActualizadorId) &&
-                !Role.fromNombre(obtenerUsuarioPorId(usuarioActualizadorId).getRol()).equals(Role.ADMINISTRADOR)) {
+        if (!usuarioId.equals(usuarioActualizadorId)
+                && !Role.fromNombre(obtenerUsuarioPorId(usuarioActualizadorId).getRol()).equals(Role.ADMINISTRADOR)) {
             throw new BusinessException("No tiene permisos para eliminar la foto de este usuario");
         }
 
