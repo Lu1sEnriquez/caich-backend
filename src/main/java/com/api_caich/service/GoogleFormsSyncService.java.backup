@@ -1,0 +1,483 @@
+package com.api_caich.service;
+
+import java.io.StringReader;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
+
+import com.api_caich.entity.Configuracion;
+import com.api_caich.entity.Ticket;
+import com.api_caich.exception.BusinessException;
+import com.api_caich.repository.ConfiguracionRepository;
+import com.api_caich.repository.TicketRepository;
+import com.opencsv.CSVReader;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class GoogleFormsSyncService {
+
+    private final PagoService pagoService;
+    private final TicketRepository ticketRepository;
+    private final RestTemplate restTemplate;
+    private final ConfiguracionRepository configRepository;
+
+    private static final Pattern DRIVE_FILE_ID_PATTERN = Pattern.compile(
+            "(?:(?:/file/d/)|(?:[?&]id=))([a-zA-Z0-9_-]{25,})"  // /file/d/{ID} o ?id={ID}
+    );
+    
+    private static final Pattern DRIVE_FILE_ID_PATTERN_ALTERNATE = Pattern.compile(
+            "[?&]id=([a-zA-Z0-9_-]+)"  // Alternativa para ?id=XXX
+    );
+
+
+    public void sincronizarDesdeForms(Long adminId) {
+        try {
+            log.info("Iniciando descarga de CSV desde Google Sheets...");
+
+            Configuracion config = configRepository.findByClave("GOOGLE_FORMS_CSV_URL")
+                    .orElseThrow(() -> new BusinessException("No se encontró la URL de sincronización en la BD"));
+
+            String csvUrl = config.getValor();
+
+            String csvContent = restTemplate.getForObject(csvUrl, String.class);
+            if (csvContent == null || csvContent.isEmpty()) {
+                throw new BusinessException("El archivo CSV de Google está vacío o no es accesible.");
+            }
+
+            try (CSVReader reader = new CSVReader(new StringReader(csvContent))) {
+                List<String[]> filas = reader.readAll();
+
+                // ÍNDICES ACTUALIZADOS BASADOS EN TU FORMULARIO CON EMAIL:
+                // [0] Marca temporal
+                // [1] Dirección de correo electrónico (NUEVA COLUMNA)
+                // [2] Folio del Ticket (Antes era index 1)
+                // [3] Nombre Completo del Pagador (Antes era index 2)
+                // [4] Monto Pagado ($) (Antes era index 3)
+                // [5] Método de Pago (Antes era index 4)
+                // [6] Referencia (Antes era index 5)
+                // [7] Fecha de Pago (Antes era index 6)
+                // [8] Comprobante de Pago (Antes era index 7)
+
+                for (int i = 1; i < filas.size(); i++) {
+                    String[] fila = filas.get(i);
+
+                    if (fila.length < 9) continue; // Ahora validamos que tenga al menos 9 columnas
+
+                    String folio = fila[2].trim(); // CAMBIO A ÍNDICE 2
+                    String nombrePaciente = fila[3]; // CAMBIO A ÍNDICE 3
+                    String montoRaw = fila[4].replaceAll("[^0-9.]", ""); // CAMBIO A ÍNDICE 4
+                    BigDecimal monto = new BigDecimal(montoRaw.isEmpty() ? "0" : montoRaw);
+                    String metodoStr = fila[5].toUpperCase(); // CAMBIO A ÍNDICE 5
+                    String referencia = fila[6]; // CAMBIO A ÍNDICE 6
+                    String notas = "Sincronizado vía Google Forms. Reportado por: " + nombrePaciente;
+                    String comprobanteUrlDrive = fila[8]; // CAMBIO A ÍNDICE 8 - URL de Google Drive
+
+                    log.debug("Procesando folio detectado: {}", folio);
+
+                    Ticket ticket = ticketRepository.findByFolio(folio)
+                            .orElseThrow(() -> new BusinessException("No se encontró el Ticket con folio: " + folio));
+
+                    // VALIDACIÓN: Verificar si ya existe un pago para este ticket
+                    // para evitar registros duplicados
+                    boolean pagoYaExiste = ticket.getPagos() != null && 
+                            ticket.getPagos().stream()
+                            .anyMatch(p -> p.getMonto().compareTo(monto) == 0);
+                    
+                    if (pagoYaExiste) {
+                        log.info("Pago duplicado detectado para folio {}. Saltando...", folio);
+                        continue; // Saltar este registro
+                    }
+
+                    // Limpiar URL de Drive para almacenamiento
+                    String comprobanteUrlLimpia = limpiarUrlDrive(comprobanteUrlDrive);
+                    log.info("URL de Drive procesada para folio {}: {}", folio, comprobanteUrlLimpia);
+
+                    pagoService.registrarPagoConComprobante(
+                            ticket.getTicketId(),
+                            monto,
+                            metodoStr,
+                            referencia,
+                            notas,
+                            comprobanteUrlLimpia, // URL de Drive limpia
+                            adminId
+                    );
+                }
+            }
+            log.info("Sincronización de Google Forms completada con éxito.");
+
+        } catch (Exception e) {
+            log.error("Error crítico durante la sincronización: ", e);
+            throw new RuntimeException("Fallo al procesar el registro de pagos: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Limpia y normaliza la URL de Google Drive para almacenamiento
+     * Convierte formatos como /open?id=XXX o /uc?id=XXX a /file/d/XXX/view
+     * 
+     * @param driveUrl URL original de Google Drive
+     * @return URL limpia y normalizada
+     */
+    private String limpiarUrlDrive(String driveUrl) {
+        if (driveUrl == null || driveUrl.trim().isEmpty()) {
+            log.warn("URL de Drive vacía o nula");
+            return null;
+        }
+
+        driveUrl = driveUrl.trim();
+
+        // Si ya está en formato correcto, retornarla
+        if (driveUrl.contains("/file/d/") && driveUrl.contains("/view")) {
+            log.debug("URL ya está en formato correcto: {}", driveUrl);
+            return driveUrl;
+        }
+
+        // Extraer ID del archivo
+        String fileId = extraerDriveFileId(driveUrl);
+        if (fileId == null) {
+            log.warn("No se pudo extraer ID de la URL: {}. Usando URL original.", driveUrl);
+            return driveUrl;
+        }
+
+        // Generar URL en formato estándar /file/d/ID/view
+        String urlNormalizada = String.format("https://drive.google.com/file/d/%s/view", fileId);
+        log.debug("URL normalizada: {} -> {}", driveUrl, urlNormalizada);
+        
+        return urlNormalizada;
+    }
+
+    /**
+     * Extrae el ID de archivo de una URL de Google Drive
+     * Soporta formatos: /file/d/ID, /open?id=ID, /uc?id=ID
+     */
+    private String extraerDriveFileId(String driveUrl) {
+        if (driveUrl == null || driveUrl.isEmpty()) {
+            log.warn("URL de Drive vacía");
+            return null;
+        }
+
+        log.debug("Extrayendo ID de: {}", driveUrl);
+
+        // Intento 1: Patrón principal
+        Matcher matcher = DRIVE_FILE_ID_PATTERN.matcher(driveUrl);
+        if (matcher.find()) {
+            String id = matcher.group(1);
+            if (id != null && !id.isEmpty()) {
+                log.debug("ID extraído (patrón 1): {}", id);
+                return id;
+            }
+        }
+
+        // Intento 2: Patrón alternativo
+        Matcher matcherAlt = DRIVE_FILE_ID_PATTERN_ALTERNATE.matcher(driveUrl);
+        if (matcherAlt.find()) {
+            String id = matcherAlt.group(1);
+            if (id != null && !id.isEmpty()) {
+                log.debug("ID extraído (patrón 2): {}", id);
+                return id;
+            }
+        }
+
+        // Intento 3: Búsqueda simple de /file/d/
+        int fileIndex = driveUrl.indexOf("/file/d/");
+        if (fileIndex >= 0) {
+            int start = fileIndex + 8; // largo de "/file/d/"
+            int end = driveUrl.indexOf("/", start);
+            if (end < 0) {
+                end = driveUrl.indexOf("?", start);
+            }
+            if (end < 0) {
+                end = driveUrl.length();
+            }
+            if (start < end) {
+                String id = driveUrl.substring(start, end).trim();
+                if (!id.isEmpty()) {
+                    log.debug("ID extraído (búsqueda 1): {}", id);
+                    return id;
+                }
+            }
+        }
+
+        // Intento 4: Búsqueda simple de ?id=
+        int idIndex = driveUrl.indexOf("id=");
+        if (idIndex >= 0) {
+            int start = idIndex + 3;
+            int end = driveUrl.indexOf("&", start);
+            if (end < 0) {
+                end = driveUrl.length();
+            }
+            String id = driveUrl.substring(start, end).trim();
+            if (!id.isEmpty()) {
+                log.debug("ID extraído (búsqueda 2): {}", id);
+                return id;
+            }
+        }
+
+        log.warn("No se pudo extraer el ID de archivo de la URL: {}", driveUrl);
+        return null;
+    }
+
+    /**
+     * Descarga un comprobante desde Google Drive y lo guarda localmente
+     * @param driveUrl URL del archivo en Google Drive
+     * @param ticketId ID del ticket
+     * @param folio Folio del ticket (para logs)
+     * @return Ruta local del archivo guardado o URL de Drive si falla
+     */
+    private String descargarYGuardarComprobanteDrive(String driveUrl, Long ticketId, String folio) {
+        // Si no hay URL de Drive, retornar null
+        if (driveUrl == null || driveUrl.trim().isEmpty()) {
+            log.warn("⚠️ No se proporcionó URL de comprobante para el folio {}", folio);
+            return null;
+        }
+
+        log.info("▶️ INICIANDO DESCARGA DE COMPROBANTE");
+        log.info("   Folio: {}", folio);
+        log.info("   Ticket ID: {}", ticketId);
+        log.info("   URL Drive: {}", driveUrl);
+
+        try {
+            // 1. Extraer ID del archivo de Drive
+            log.info("   [PASO 1] Extrayendo ID de archivo de Drive...");
+            String fileId = extraerDriveFileId(driveUrl);
+            if (fileId == null) {
+                log.error("   ❌ ERROR: No se pudo extraer el ID de Drive de la URL: {}", driveUrl);
+                log.error("   ⚠️ FALLBACK: Usando URL de Drive original en la base de datos");
+                return driveUrl; // Fallback a URL original
+            }
+
+            log.info("   ✅ ID extraído exitosamente: {}", fileId);
+
+            // 2. Intentar descarga con Google Drive API (para archivos privados)
+            log.info("   [PASO 2] Verificando si Google Drive API está configurada...");
+            if (googleDriveService.isConfigured()) {
+                log.info("   ✅ Google Drive API configurada. Intentando descarga de archivo privado...");
+                
+                try {
+                    byte[] contenido = googleDriveService.downloadFile(fileId);
+                    
+                    log.info("   ✅ Descarga exitosa via Google Drive API: {} bytes ({}KB)",
+                             contenido.length,
+                             String.format("%.2f", contenido.length / 1024.0));
+                    
+                    // Validar y guardar
+                    return validarYGuardarComprobante(contenido, ticketId, folio, driveUrl);
+                    
+                } catch (Exception e) {
+                    log.warn("   ⚠️ Fallo descarga via Google Drive API: {}", e.getMessage());
+                    log.warn("   Intentando descarga pública como fallback...");
+                }
+            } else {
+                log.warn("   ⚠️ Google Drive API NO configurada");
+                log.warn("   Service Account Email: {}", googleDriveService.getServiceAccountEmail());
+                log.warn("   Configuracion necesaria: google.drive.credentials.path");
+                log.warn("   Intentando descarga pública...");
+            }
+
+            // 3. Fallback: Intentar descarga pública (método anterior)
+            // Usar drive.usercontent.google.com que es más directo para descargas
+            log.info("   [PASO 3] Generando URL de descarga pública...");
+            String downloadUrl = String.format(
+                    "https://drive.usercontent.google.com/download?id=%s&export=download&confirm=t",
+                    fileId
+            );
+            log.info("   ✅ URL de descarga: {}", downloadUrl);
+
+            // 4. Descargar el archivo con headers especiales
+            log.info("   [PASO 4] Descargando archivo desde Google Drive (público)...");
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            headers.set("Accept", "image/*,*/*");
+            
+            ResponseEntity<byte[]> response = restTemplate.getForEntity(downloadUrl, byte[].class);
+            
+            log.info("   Status de respuesta: {}", response.getStatusCode());
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                byte[] contenido = response.getBody();
+                
+                log.info("   ✅ Descarga exitosa: {} bytes ({}KB)",
+                         contenido.length,
+                         String.format("%.2f", contenido.length / 1024.0));
+                log.info("   Content-Type: {}", response.getHeaders().getContentType());
+                
+                // Validar y guardar
+                return validarYGuardarComprobante(contenido, ticketId, folio, driveUrl);
+
+            } else {
+                log.error("   ❌ ERROR: Respuesta de descarga no exitosa para folio {}", folio);
+                log.error("   Status code: {}", response.getStatusCode());
+                log.error("   ⚠️ FALLBACK: Usando URL de Drive original");
+                return driveUrl; // Fallback
+            }
+
+        } catch (RestClientException e) {
+            log.error("   ❌ ERROR DE CONEXIÓN al descargar comprobante desde Drive para folio {}", folio);
+            log.error("   Detalle: {}", e.getMessage());
+            log.error("   ⚠️ FALLBACK: Usando URL de Drive original");
+            return driveUrl; // Fallback
+
+        } catch (Exception e) {
+            log.error("   ❌ ERROR INESPERADO al descargar comprobante para folio {}", folio);
+            log.error("   Tipo de error: {}", e.getClass().getSimpleName());
+            log.error("   Mensaje: {}", e.getMessage());
+            log.error("   ⚠️ FALLBACK: Usando URL de Drive original");
+            return driveUrl; // Fallback
+        }
+    }
+
+    /**
+     * Valida el contenido descargado y lo guarda localmente
+     * @param contenido Bytes del archivo descargado
+     * @param ticketId ID del ticket
+     * @param folio Folio del ticket
+     * @param driveUrl URL original de Drive (fallback)
+     * @return Ruta local del archivo guardado o URL de Drive si falla
+     */
+    private String validarYGuardarComprobante(byte[] contenido, Long ticketId, String folio, String driveUrl) {
+        log.info("   [VALIDACIÓN] Validando contenido del archivo...");
+        String magicBytes = String.format("%02X %02X %02X %02X",
+            contenido.length > 0 ? contenido[0] & 0xFF : 0,
+            contenido.length > 1 ? contenido[1] & 0xFF : 0,
+            contenido.length > 2 ? contenido[2] & 0xFF : 0,
+            contenido.length > 3 ? contenido[3] & 0xFF : 0);
+        log.info("   Magic bytes: {}", magicBytes);
+        
+        // Detectar si es HTML (Google Drive devolviendo página en lugar de archivo)
+        if (contenido.length > 15) {
+            String inicioContenido = new String(contenido, 0, Math.min(100, contenido.length));
+            if (inicioContenido.toLowerCase().contains("<!doctype") || 
+                inicioContenido.toLowerCase().contains("<html")) {
+                log.error("   ❌ ERROR: Google Drive devolvió HTML en lugar del archivo");
+                log.error("   Esto significa que:");
+                log.error("   1. El archivo NO es público (falta permiso 'Cualquiera con el enlace')");
+                log.error("   2. O Google Drive requiere confirmación adicional");
+                log.error("   ");
+                log.error("   SOLUCIÓN RECOMENDADA:");
+                log.error("   - Opción A: Configura Google Drive API con Service Account");
+                log.error("   - Opción B: Haz el archivo público (Compartir → Cualquiera con el enlace)");
+                log.error("   ");
+                log.error("   ⚠️ FALLBACK: Usando URL de Drive original");
+                return driveUrl;
+            }
+        }
+        
+        if (!esImagenValida(contenido)) {
+            log.error("   ❌ ERROR: El archivo descargado no parece ser una imagen/PDF válida para folio {}", folio);
+            log.error("   Magic bytes detectados: {}", magicBytes);
+            log.error("   ⚠️ FALLBACK: Usando URL de Drive original");
+            return driveUrl;
+        }
+        log.info("   ✅ Archivo válido detectado");
+
+        // Guardar archivo localmente usando FileStorageService
+        log.info("   [GUARDADO] Guardando archivo localmente...");
+        String extension = detectarExtension(contenido);
+        log.info("   Extensión detectada: .{}", extension);
+        
+        try {
+            String rutaLocal = fileStorageService.almacenarComprobanteDesdeBytes(
+                    contenido,
+                    ticketId,
+                    extension
+            );
+            
+            log.info("   ✅ ¡ÉXITO! Comprobante guardado localmente");
+            log.info("   📁 Ruta local: {}", rutaLocal);
+            log.info("   📊 Tamaño: {} bytes ({}KB)", contenido.length, String.format("%.2f", contenido.length / 1024.0));
+            log.info("   🎯 Folio: {}", folio);
+
+            return rutaLocal;
+            
+        } catch (Exception e) {
+            log.error("   ❌ ERROR al guardar archivo localmente: {}", e.getMessage());
+            log.error("   ⚠️ FALLBACK: Usando URL de Drive original");
+            return driveUrl;
+        }
+    }
+
+    /**
+     * Valida que el contenido descargado sea una imagen válida
+     * Verifica los magic bytes para formatos comunes (JPEG, PNG, GIF, WebP, PDF)
+     */
+    private boolean esImagenValida(byte[] contenido) {
+        if (contenido == null || contenido.length < 4) {
+            return false;
+        }
+
+        // JPEG: FF D8 FF
+        if (contenido[0] == (byte) 0xFF && 
+            contenido[1] == (byte) 0xD8 && 
+            contenido[2] == (byte) 0xFF) {
+            return true;
+        }
+
+        // PNG: 89 50 4E 47
+        if (contenido[0] == (byte) 0x89 && 
+            contenido[1] == (byte) 0x50 && 
+            contenido[2] == (byte) 0x4E && 
+            contenido[3] == (byte) 0x47) {
+            return true;
+        }
+
+        // GIF: 47 49 46 38
+        if (contenido[0] == (byte) 0x47 && 
+            contenido[1] == (byte) 0x49 && 
+            contenido[2] == (byte) 0x46 && 
+            contenido[3] == (byte) 0x38) {
+            return true;
+        }
+
+        // PDF: 25 50 44 46
+        if (contenido[0] == (byte) 0x25 && 
+            contenido[1] == (byte) 0x50 && 
+            contenido[2] == (byte) 0x44 && 
+            contenido[3] == (byte) 0x46) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Detecta la extensión del archivo basándose en los magic bytes
+     */
+    private String detectarExtension(byte[] contenido) {
+        if (contenido == null || contenido.length < 4) {
+            return "jpg"; // Default
+        }
+
+        // JPEG
+        if (contenido[0] == (byte) 0xFF && contenido[1] == (byte) 0xD8) {
+            return "jpg";
+        }
+
+        // PNG
+        if (contenido[0] == (byte) 0x89 && contenido[1] == (byte) 0x50) {
+            return "png";
+        }
+
+        // GIF
+        if (contenido[0] == (byte) 0x47 && contenido[1] == (byte) 0x49) {
+            return "gif";
+        }
+
+        // PDF
+        if (contenido[0] == (byte) 0x25 && contenido[1] == (byte) 0x50) {
+            return "pdf";
+        }
+
+        return "jpg"; // Default
+    }
+}

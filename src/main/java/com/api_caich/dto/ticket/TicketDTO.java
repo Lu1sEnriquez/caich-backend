@@ -93,6 +93,7 @@ public class TicketDTO {
                     .fechaFin(cita.getFechaFin())
                     .precioCobrado(cita.getPrecioCobrado())
                     .notasTerapia(cita.getNotasTerapia())
+                    .modalidad(cita.getModalidad())
                     .build();
         }
 

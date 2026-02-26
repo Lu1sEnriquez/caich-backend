@@ -1,0 +1,7 @@
+# ===============================
+# GOOGLE DRIVE API CONFIG
+# ===============================
+# Ruta al archivo JSON de credenciales de Service Account
+# Si está vacío, intentará descarga pública (requiere archivos públicos)
+google.drive.credentials.path=D:/Documentos/CaichAPP/caich-app/caich-drive-credentials.json
+google.drive.application-name=CAICH API

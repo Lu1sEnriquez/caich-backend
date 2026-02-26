@@ -25,9 +25,6 @@ public class Espacio extends BaseEntity {
     @Column(name = "Nombre", nullable = false, length = 100)
     private String nombre;
 
-    @Column(name = "Tipo", nullable = false, length = 50)
-    private String tipo;
-
     @Column(name = "Descripcion", columnDefinition = "NVARCHAR(MAX)")
     private String descripcion;
 

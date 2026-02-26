@@ -1,5 +1,20 @@
 package com.api_caich.controller;
 
+import java.util.List;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.api_caich.dto.BaseResponseDTO;
 import com.api_caich.dto.DataResponseDTO;
 import com.api_caich.dto.espacio.ActualizarEspacioDTO;
@@ -7,18 +22,13 @@ import com.api_caich.dto.espacio.CrearEspacioDTO;
 import com.api_caich.dto.espacio.EspacioDTO;
 import com.api_caich.security.CustomUserDetails;
 import com.api_caich.service.EspacioService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/espacios")
@@ -45,16 +55,6 @@ public class EspacioController {
         return ResponseEntity.ok(DataResponseDTO.success(espacios, "Active spaces retrieved successfully"));
     }
 
-    @GetMapping("/tipo/{tipo}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA', 'ALUMNO')")
-    @Operation(summary = "Get spaces by type", description = "Get list of spaces by specific type")
-    public ResponseEntity<DataResponseDTO<List<EspacioDTO>>> obtenerEspaciosPorTipo(
-            @Parameter(description = "Space type") @PathVariable String tipo) {
-
-        List<EspacioDTO> espacios = espacioService.obtenerEspaciosPorTipo(tipo);
-        return ResponseEntity.ok(DataResponseDTO.success(espacios, "Spaces by type retrieved successfully"));
-    }
-
     @GetMapping("/disponibles")
     @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA', 'ALUMNO')")
     @Operation(summary = "Get available spaces by capacity", description = "Get list of available spaces with minimum capacity")
@@ -64,6 +64,7 @@ public class EspacioController {
         List<EspacioDTO> espacios = espacioService.obtenerEspaciosDisponiblesPorCapacidad(capacidadMinima);
         return ResponseEntity.ok(DataResponseDTO.success(espacios, "Available spaces retrieved successfully"));
     }
+
 
     @GetMapping("/{espacioId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA', 'ALUMNO')")

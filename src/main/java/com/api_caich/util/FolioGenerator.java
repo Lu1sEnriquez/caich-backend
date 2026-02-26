@@ -1,11 +1,12 @@
 package com.api_caich.util;
 
-import com.api_caich.repository.TicketRepository;
-import org.springframework.stereotype.Component;
-
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.concurrent.atomic.AtomicInteger;
+
+import org.springframework.stereotype.Component;
+
+import com.api_caich.repository.TicketRepository;
+
 @Component
 public class FolioGenerator {
 
@@ -24,4 +25,5 @@ public class FolioGenerator {
 
         return String.format("TKT-%s-%04d", timestamp, nextSequence);
     }
+
 }

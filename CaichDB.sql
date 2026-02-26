@@ -334,6 +334,38 @@ GO
 CREATE NONCLUSTERED INDEX IX_Config_EspacioFecha ON [ConfiguracionEspacioHorario](EspacioId, Fecha);
 GO
 
+-- Tabla: ConfiguracionOperativaEspacio
+-- Configuración operativa de intervalos de tiempo por espacio
+-- Define la cuadrícula de horarios disponibles para reservas
+CREATE TABLE [ConfiguracionOperativaEspacio] (
+    [ConfigOperativaId] INT PRIMARY KEY IDENTITY(1, 1),
+    [EspacioId] INT NULL, -- NULL = Configuración global por defecto
+    [HoraApertura] TIME NOT NULL,
+    [HoraCierre] TIME NOT NULL,
+    [IntervaloMinutos] INT NOT NULL,
+    [DuracionMinimaMinutos] INT NOT NULL,
+    [DuracionMaximaMinutos] INT NOT NULL,
+    [DiasOperativos] NVARCHAR(50), -- '1,2,3,4,5' = Lunes a Viernes
+    [EstaActivo] BIT NOT NULL DEFAULT 1,
+    [FechaCreacion] DATETIME NOT NULL DEFAULT GETDATE(),
+    [UltimaActualizacion] DATETIME NOT NULL DEFAULT GETDATE(),
+    
+    -- Constraints
+    CONSTRAINT CHK_ConfigOperativa_Intervalo CHECK (IntervaloMinutos > 0 AND IntervaloMinutos <= 240),
+    CONSTRAINT CHK_ConfigOperativa_Duracion CHECK (DuracionMinimaMinutos <= DuracionMaximaMinutos),
+    CONSTRAINT CHK_ConfigOperativa_Horario CHECK (HoraCierre > HoraApertura),
+    CONSTRAINT UQ_ConfigOperativa_Espacio UNIQUE (EspacioId),
+    
+    -- Foreign Keys
+    CONSTRAINT FK_ConfigOperativa_Espacio FOREIGN KEY (EspacioId) REFERENCES [Espacios](EspacioId)
+);
+GO
+
+-- Índices para ConfiguracionOperativaEspacio
+CREATE NONCLUSTERED INDEX IX_ConfigOperativa_Activos ON [ConfiguracionOperativaEspacio](EstaActivo);
+CREATE NONCLUSTERED INDEX IX_ConfigOperativa_Espacio ON [ConfiguracionOperativaEspacio](EspacioId);
+GO
+
 -- =====================================================
 -- AUDITORÍA Y REPORTES
 -- =====================================================
@@ -443,6 +475,27 @@ CREATE TABLE RefreshTokens (
 
 CREATE UNIQUE INDEX IX_RefreshTokens_Usuario ON RefreshTokens(UsuarioId) WHERE activo = 1;
 CREATE INDEX IX_RefreshTokens_Expiry ON RefreshTokens(expiryDate);
+
+-- =====================================================
+-- CONFIGURACIONES OPERATIVAS
+-- =====================================================
+
+-- Tabla: Configuraciones
+-- Permite historico de valores por clave usando Activo
+CREATE TABLE [Configuraciones] (
+    [Id] INT PRIMARY KEY IDENTITY(1, 1),
+    [Clave] NVARCHAR(100) NOT NULL,
+    [Valor] NVARCHAR(MAX) NOT NULL,
+    [Descripcion] NVARCHAR(500),
+    [Activo] BIT NOT NULL DEFAULT 1,
+    [UltimaActualizacion] DATETIME NOT NULL DEFAULT GETDATE()
+);
+GO
+
+-- Indices para Configuraciones
+CREATE NONCLUSTERED INDEX IX_Configuraciones_Clave ON [Configuraciones](Clave);
+CREATE NONCLUSTERED INDEX IX_Configuraciones_Activas ON [Configuraciones](Clave, Activo);
+GO
 
 -- =====================================================
 -- DOCUMENTACIÓN DE PROPIEDADES EXTENDIDAS

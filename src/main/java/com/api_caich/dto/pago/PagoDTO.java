@@ -27,6 +27,7 @@ public class PagoDTO {
     private String referencia;
     private EstadoPagoTransaccion estado;
     private String motivoRechazo;
+    private String notas;
     private String verificadoPorNombre;
     private LocalDateTime fechaPago;
     private LocalDateTime fechaCreacion;
@@ -46,6 +47,7 @@ public class PagoDTO {
                 .referencia(pago.getReferencia())
                 .estado(pago.getEstado())
                 .motivoRechazo(pago.getMotivoRechazo())
+                .notas(pago.getNotas())
                 .verificadoPorNombre(pago.getVerificadoPor() != null ? pago.getVerificadoPor().getNombreCompleto() : null)
                 .fechaPago(pago.getFechaPago())
                 .fechaCreacion(pago.getFechaCreacion())

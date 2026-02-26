@@ -50,4 +50,7 @@ public class TicketCita {
 
     @Column(name = "NotasTerapia", columnDefinition = "NVARCHAR(MAX)")
     private String notasTerapia;
+
+    @Column(name = "Modalidad", length = 50, nullable = false, columnDefinition = "NVARCHAR(50) DEFAULT 'Presencial'")
+    private String modalidad = "Presencial"; // Presencial u Online
 }

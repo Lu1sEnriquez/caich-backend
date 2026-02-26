@@ -1,14 +1,15 @@
 package com.api_caich.dto.prestamo;
 
-import lombok.Builder;
-import lombok.Data;
-
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+
+import lombok.Builder;
+import lombok.Data;
 
 @Data
 @Builder
 public class PrestamoDTO {
+
     private Long prestamoId;
     private String alumnoNombre;
     private String productoNombre;
@@ -16,7 +17,6 @@ public class PrestamoDTO {
     private LocalDateTime fechaDevolucionEstimada;
     private LocalDateTime fechaDevolucionReal;
     private String estadoPrestamo;
-    private Integer diasVencidos;
 
     public Integer getDiasVencidos() {
         if ("Activo".equals(estadoPrestamo) && fechaDevolucionEstimada != null) {

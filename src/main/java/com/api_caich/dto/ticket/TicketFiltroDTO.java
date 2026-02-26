@@ -33,6 +33,11 @@ public class TicketFiltroDTO {
     private String terapeutaNombre;
     private String terapeutaEmail;
     private LocalDateTime fechaInicioCita;
+    private String modalidad; // Presencial u Online
+
+    // Información del cubículo/espacio (si existe)
+    private Long espacioId;
+    private String espacioNombre;
 
     // Información financiera
     private BigDecimal montoTotal;
@@ -55,6 +60,9 @@ public class TicketFiltroDTO {
         String terapeutaNombre = null;
         String terapeutaEmail = null;
         LocalDateTime fechaInicioCita = null;
+        Long espacioId = null;
+        String espacioNombre = null;
+        String modalidad = "Presencial"; // Default
 
         // Extraer información de la cita si existe
         if (ticket.getCita() != null) {
@@ -67,6 +75,16 @@ public class TicketFiltroDTO {
                 terapeutaEmail = ticket.getCita().getTerapeuta().getEmail();
             }
             fechaInicioCita = ticket.getCita().getFechaInicio();
+            modalidad = ticket.getCita().getModalidad() != null ? ticket.getCita().getModalidad() : "Presencial";
+        }
+        
+        // Obtener espacio de TicketEspacio (primera reserva si existe)
+        if (ticket.getEspacios() != null && !ticket.getEspacios().isEmpty()) {
+            var primeraReserva = ticket.getEspacios().get(0);
+            if (primeraReserva.getEspacio() != null) {
+                espacioId = primeraReserva.getEspacio().getEspacioId();
+                espacioNombre = primeraReserva.getEspacio().getNombre();
+            }
         }
 
         return TicketFiltroDTO.builder()
@@ -81,6 +99,9 @@ public class TicketFiltroDTO {
                 .terapeutaNombre(terapeutaNombre)
                 .terapeutaEmail(terapeutaEmail)
                 .fechaInicioCita(fechaInicioCita)
+                .modalidad(modalidad)
+                .espacioId(espacioId)
+                .espacioNombre(espacioNombre)
                 .montoTotal(ticket.getMontoTotal())
                 .montoPagado(ticket.getMontoPagado())
                 .saldoPendiente(ticket.getSaldoPendiente())

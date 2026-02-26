@@ -37,4 +37,7 @@ public class TicketCitaDTO {
     private BigDecimal precioCobrado;
 
     private String notasTerapia;
+
+    @Builder.Default
+    private String modalidad = "Presencial"; // Presencial u Online
 }

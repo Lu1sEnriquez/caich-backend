@@ -54,6 +54,9 @@ public class Pago extends BaseEntity {
     @Column(name = "MotivoRechazo")
     private String motivoRechazo;
 
+    @Column(name = "Notas", length = 500)
+    private String notas;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "VerificadoPor")
     private Usuario verificadoPor;

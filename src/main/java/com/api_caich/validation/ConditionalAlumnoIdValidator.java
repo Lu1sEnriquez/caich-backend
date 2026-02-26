@@ -1,15 +1,14 @@
 package com.api_caich.validation;
 
-import com.api_caich.dto.RegisterRequestDTO;
 import com.api_caich.dto.usuario.CrearUsuarioDTO;
 
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 
-public class ConditionalAlumnoIdValidator implements ConstraintValidator<ConditionalAlumnoId, CrearUsuarioDTO > {
+public class ConditionalAlumnoIdValidator implements ConstraintValidator<ConditionalAlumnoId, CrearUsuarioDTO> {
 
     @Override
-    public boolean isValid(CrearUsuarioDTO  dto, ConstraintValidatorContext context) {
+    public boolean isValid(CrearUsuarioDTO dto, ConstraintValidatorContext context) {
         if (dto == null) {
             return true; // se maneja con @NotNull si fuera necesario
         }

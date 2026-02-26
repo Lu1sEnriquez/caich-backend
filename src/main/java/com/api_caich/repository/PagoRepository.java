@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import com.api_caich.entity.Pago;
+import com.api_caich.entity.Ticket;
 import com.api_caich.enums.EstadoPagoTransaccion;
 
 @Repository
@@ -14,4 +15,6 @@ public interface PagoRepository extends JpaRepository<Pago, Long> {
     List<Pago> findByTicket_TicketId(Long ticketId);
 
     List<Pago> findByEstado(EstadoPagoTransaccion estado);
+
+    List<Pago> findByTicketAndEstado(Ticket ticket, EstadoPagoTransaccion estado);
 }

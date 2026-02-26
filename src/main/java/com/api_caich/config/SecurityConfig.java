@@ -1,7 +1,6 @@
 package com.api_caich.config;
 
-import com.api_caich.enums.Role;
-import com.api_caich.security.JwtAuthenticationFilter;
+import java.util.Arrays;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -21,7 +20,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import java.util.Arrays;
+
+import com.api_caich.enums.Role;
+import com.api_caich.security.JwtAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -47,9 +48,22 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/health",
                                 "/health/detailed",
-                                "/cuentas-bancarias/**"
-                                )
+                                "/uploads/**",
+                                "/comprobantes/**", // Permitir acceso a comprobantes
+                                "/assets/**" // Permitir acceso a assets estáticos
+                        )
                         .permitAll()
+
+                        // Comprobantes de pago (permitir acceso autenticado por rol)
+                        .requestMatchers("/pagos/comprobantes/**", "/pagos/subir-comprobante", "/pagos/ticket/**")
+                        .hasAnyRole(
+                                Role.ADMINISTRADOR.getRoleValue(),
+                                Role.PACIENTE.getRoleValue()
+                        )
+
+                        // Cuentas bancarias — solo admin
+                        .requestMatchers("/cuentas-bancarias/**")
+                        .hasRole(Role.ADMINISTRADOR.getRoleValue())
 
                         // Endpoints de administración
                         .requestMatchers(
@@ -73,13 +87,16 @@ public class SecurityConfig {
                                 "/prestamos/mis-prestamos"
                         ).hasRole(Role.ALUMNO.getRoleValue())
 
-                        // Endpoints de terapeuta
+                        // Endpoints de terapeuta y creación
                         .requestMatchers(
-                                "/tickets/**",
                                 "/prestamos/**",
                                 "/citas/**",
                                 "/configuracion-horarios/**")
                         .hasAnyRole(Role.ADMINISTRADOR.getRoleValue(), Role.TERAPEUTA.getRoleValue())
+
+                        // Tickets - manejado por @PreAuthorize en controlador (permite PACIENTE también)
+                        .requestMatchers("/tickets/**")
+                        .authenticated()
 
                         // Endpoints compartidos
                         .requestMatchers(
@@ -123,7 +140,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:4200")); // Angular frontend
+        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-Requested-With"));
         configuration.setAllowCredentials(true);

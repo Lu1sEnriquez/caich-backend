@@ -22,8 +22,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.api_caich.dto.BaseResponseDTO;
 import com.api_caich.dto.DataResponseDTO;
+import com.api_caich.dto.ticket.TicketBasicoDTO;
 import com.api_caich.dto.ticket.TicketDTO;
-import com.api_caich.dto.ticket.TicketFiltroDTO;
+import com.api_caich.dto.ticket.TicketEspacioDTO;
+import com.api_caich.dto.ticket.TicketProductosUpdateDTO;
 import com.api_caich.dto.ticket.TicketRequestDTO;
 import com.api_caich.enums.EstadoFinanciero;
 import com.api_caich.enums.EstadoTicket;
@@ -53,10 +55,52 @@ public class TicketController {
             @Valid @RequestBody TicketRequestDTO ticketRequest,
             @AuthenticationPrincipal CustomUserDetails authentication) {
 
-        Long usuarioId = authentication.getId();
         TicketDTO ticket = ticketService.crearTicket(ticketRequest);
 
         return ResponseEntity.ok(DataResponseDTO.success(ticket, "Ticket created successfully"));
+    }
+
+    @PutMapping("/{ticketId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA')")
+    @Operation(summary = "Update complete ticket", description = "Update entire ticket including cita, espacios, ventas, and prestamos")
+    public ResponseEntity<DataResponseDTO<TicketDTO>> actualizarTicket(
+            @Parameter(description = "Ticket ID") @PathVariable Long ticketId,
+            @Valid @RequestBody TicketRequestDTO ticketRequest,
+            @AuthenticationPrincipal CustomUserDetails authentication) {
+
+        Long usuarioId = authentication.getId();
+        TicketDTO ticket = ticketService.actualizarTicket(ticketId, ticketRequest, usuarioId);
+
+        return ResponseEntity.ok(DataResponseDTO.success(ticket, "Ticket updated successfully"));
+    }
+
+    @PutMapping("/{ticketId}/espacios/{reservaId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA')")
+    @Operation(summary = "Update space reservation", description = "Update a cubicle reservation for a ticket")
+    public ResponseEntity<DataResponseDTO<TicketDTO>> actualizarReservaEspacio(
+            @Parameter(description = "Ticket ID") @PathVariable Long ticketId,
+            @Parameter(description = "Space reservation ID") @PathVariable Long reservaId,
+            @Valid @RequestBody TicketEspacioDTO request,
+            @AuthenticationPrincipal CustomUserDetails authentication) {
+
+        Long usuarioId = authentication.getId();
+        TicketDTO ticket = ticketService.actualizarReservaEspacio(ticketId, reservaId, request, usuarioId);
+
+        return ResponseEntity.ok(DataResponseDTO.success(ticket, "Space reservation updated successfully"));
+    }
+
+    @PutMapping("/{ticketId}/productos")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA')")
+    @Operation(summary = "Update ticket products", description = "Replace products (ventas/prestamos) for a ticket")
+    public ResponseEntity<DataResponseDTO<TicketDTO>> actualizarProductos(
+            @Parameter(description = "Ticket ID") @PathVariable Long ticketId,
+            @Valid @RequestBody TicketProductosUpdateDTO request,
+            @AuthenticationPrincipal CustomUserDetails authentication) {
+
+        Long usuarioId = authentication.getId();
+        TicketDTO ticket = ticketService.actualizarProductos(ticketId, request, usuarioId);
+
+        return ResponseEntity.ok(DataResponseDTO.success(ticket, "Ticket products updated successfully"));
     }
 
     @PutMapping("/{ticketId}/estado")
@@ -90,27 +134,32 @@ public class TicketController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA', 'PACIENTE')")
-    @Operation(summary = "Get tickets with filters", description = "Get paginated and filtered tickets based on user role")
-    public ResponseEntity<DataResponseDTO<Page<TicketFiltroDTO>>> obtenerTickets(
+    @Operation(summary = "Get tickets with filters (basic info)", description = "Get paginated and filtered tickets with basic information based on user role")
+    public ResponseEntity<DataResponseDTO<Page<TicketBasicoDTO>>> obtenerTicketsBasico(
             @Parameter(description = "Patient ID") @RequestParam(required = false) Long pacienteId,
             @Parameter(description = "Therapist ID") @RequestParam(required = false) Long terapeutaId,
             @Parameter(description = "Ticket status") @RequestParam(required = false) EstadoTicket estadoTicket,
             @Parameter(description = "Financial status") @RequestParam(required = false) EstadoFinanciero estadoFinanciero,
             @Parameter(description = "Start date (yyyy-MM-dd)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaInicio,
             @Parameter(description = "End date (yyyy-MM-dd)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaFin,
+            @Parameter(description = "Start datetime (yyyy-MM-dd'T'HH:mm:ss)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime timeStart,
+            @Parameter(description = "End datetime (yyyy-MM-dd'T'HH:mm:ss)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime timeEnd,
             @Parameter(description = "Page number") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
             @Parameter(description = "Sort by field") @RequestParam(defaultValue = "fechaCreacion") String sortBy,
             @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String direction,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
 
-        LocalDateTime fechaInicioDateTime = fechaInicio != null ? fechaInicio.atStartOfDay() : null;
-        LocalDateTime fechaFinDateTime = fechaFin != null ? fechaFin.atTime(23, 59, 59) : null;
+        // Usar timeStart/timeEnd si se proporcionan, sino usar fechaInicio/fechaFin
+        LocalDateTime fechaInicioDateTime = timeStart != null ? timeStart 
+                : (fechaInicio != null ? fechaInicio.atStartOfDay() : null);
+        LocalDateTime fechaFinDateTime = timeEnd != null ? timeEnd 
+                : (fechaFin != null ? fechaFin.atTime(23, 59, 59) : null);
 
         Sort sort = direction.equalsIgnoreCase("desc") ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<TicketFiltroDTO> tickets = ticketService.obtenerTicketsConFiltros(
+        Page<TicketBasicoDTO> tickets = ticketService.obtenerTicketsBasicos(
                 userDetails.getId(),
                 userDetails.getRol(),
                 pacienteId,
@@ -126,8 +175,8 @@ public class TicketController {
 
     @GetMapping("/{ticketId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA', 'PACIENTE')")
-    @Operation(summary = "Get ticket by ID", description = "Get ticket details with access control based on user role")
-    public ResponseEntity<DataResponseDTO<TicketDTO>> obtenerTicket(
+    @Operation(summary = "Get ticket by ID (detailed)", description = "Get complete ticket details with all related data, with access control based on user role")
+    public ResponseEntity<DataResponseDTO<TicketDTO>> obtenerTicketDetallado(
             @Parameter(description = "Ticket ID") @PathVariable Long ticketId,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
 

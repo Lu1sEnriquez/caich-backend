@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.api_caich.entity.MovimientoInventario;
 import com.api_caich.entity.Producto;
+import com.api_caich.exception.BusinessException;
+import com.api_caich.exception.ResourceNotFoundException;
 import com.api_caich.repository.MovimientoInventarioRepository;
 import com.api_caich.repository.ProductoRepository;
 
@@ -29,16 +31,16 @@ public class ProductoService {
 
         // 1. Validaciones de Negocio Obligatorias
         if (producto.getCodigo() == null || producto.getCodigo().trim().isEmpty()) {
-            throw new RuntimeException("El código del producto es obligatorio.");
+            throw new BusinessException("El código del producto es obligatorio.");
         }
 
         if (producto.getNombre() == null || producto.getNombre().trim().isEmpty()) {
-            throw new RuntimeException("El nombre del producto es obligatorio.");
+            throw new BusinessException("El nombre del producto es obligatorio.");
         }
 
         // 2. Verificar duplicados (Importante para evitar excepciones de SQL directas)
         if (repository.findByCodigo(producto.getCodigo()).isPresent()) {
-            throw new RuntimeException("Ya existe un producto registrado con el código: " + producto.getCodigo());
+            throw new BusinessException("Ya existe un producto registrado con el código: " + producto.getCodigo());
         }
 
         // 3. Seteo de Valores por Defecto (Protección contra Nulos del JSON)
@@ -70,7 +72,7 @@ public class ProductoService {
             return repository.save(producto);
         } catch (Exception e) {
             log.error("Error al persistir el producto: {}", e.getMessage());
-            throw new RuntimeException("No se pudo guardar el producto debido a un error de integridad.");
+            throw new BusinessException("No se pudo guardar el producto debido a un error de integridad.");
         }
     }
 
@@ -79,7 +81,7 @@ public class ProductoService {
         log.info("Actualizando producto: {}", productoId);
 
         Producto producto = repository.findById(productoId)
-                .orElseThrow(() -> new RuntimeException("Producto no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
 
         producto.setNombre(productoActualizado.getNombre());
         producto.setCodigo(productoActualizado.getCodigo());
@@ -98,7 +100,7 @@ public class ProductoService {
         log.info("Desactivando producto: {}", productoId);
 
         Producto producto = repository.findById(productoId)
-                .orElseThrow(() -> new RuntimeException("Producto no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
 
         producto.setEstaActivo(false);
         repository.save(producto);

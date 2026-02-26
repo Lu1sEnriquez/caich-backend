@@ -1,5 +1,15 @@
 package com.api_caich.service;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.api_caich.dto.prestamo.CrearPrestamoDTO;
 import com.api_caich.dto.prestamo.PrestamoDTO;
 import com.api_caich.entity.Producto;
@@ -17,14 +27,6 @@ import com.api_caich.repository.UsuarioRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -35,18 +37,17 @@ public class PrestamoService {
     private final TicketRepository ticketRepository;
     private final UsuarioRepository usuarioRepository;
     private final ProductoRepository productoRepository;
-    private final InventarioService inventarioService;
-    private final NotificacionService notificacionService;
     private final AuditoriaService auditoriaService;
 
     @Transactional
     public PrestamoDTO crearPrestamo(CrearPrestamoDTO prestamoDTO, Long usuarioId) {
         log.info("Creating loan for user: {}, product: {}", prestamoDTO.getAlumnoId(), prestamoDTO.getProductoId());
 
-        Usuario usuario = usuarioRepository.findById(usuarioId)
+        Usuario usuario = usuarioRepository.findById(Objects.requireNonNull(usuarioId, "usuarioId requerido"))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        Producto producto = productoRepository.findById(prestamoDTO.getProductoId())
+        Long productoId = Objects.requireNonNull(prestamoDTO.getProductoId(), "productoId requerido");
+        Producto producto = productoRepository.findById(productoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         if (!Boolean.TRUE.equals(producto.getEsPrestable())) {
@@ -98,7 +99,8 @@ public class PrestamoService {
     public PrestamoDTO devolverPrestamo(Long prestamoId, String observaciones, Long usuarioId) {
         log.info("Devolviendo préstamo: {}", prestamoId);
 
-        TicketPrestamo prestamo = ticketPrestamoRepository.findById(prestamoId)
+        TicketPrestamo prestamo = ticketPrestamoRepository.findById(
+                Objects.requireNonNull(prestamoId, "prestamoId requerido"))
                 .orElseThrow(() -> new ResourceNotFoundException("Prestamo not found"));
 
         if (!EstadoPrestamo.ACTIVO.equals(prestamo.getEstado())) {
@@ -143,7 +145,8 @@ public class PrestamoService {
     public void marcarComoPerdido(Long prestamoId, String observaciones, Long usuarioId) {
         log.info("Marcando préstamo como perdido: {}", prestamoId);
 
-        TicketPrestamo prestamo = ticketPrestamoRepository.findById(prestamoId)
+        TicketPrestamo prestamo = ticketPrestamoRepository.findById(
+                Objects.requireNonNull(prestamoId, "prestamoId requerido"))
                 .orElseThrow(() -> new ResourceNotFoundException("Prestamo not found"));
 
         prestamo.setEstado(EstadoPrestamo.PERDIDO);
@@ -167,9 +170,9 @@ public class PrestamoService {
     }
 
     public List<PrestamoDTO> obtenerPrestamosActivosPorAlumno(Long alumnoId) {
-        Usuario usuario = usuarioRepository.findById(alumnoId)
+        Usuario usuario = usuarioRepository.findById(Objects.requireNonNull(alumnoId, "alumnoId requerido"))
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario not found"));
-        
+
         List<TicketPrestamo> prestamos = ticketPrestamoRepository.findAll().stream()
                 .filter(p -> p.getResponsable().equals(usuario) && EstadoPrestamo.ACTIVO.equals(p.getEstado()))
                 .collect(Collectors.toList());
@@ -182,16 +185,17 @@ public class PrestamoService {
     }
 
     public Page<PrestamoDTO> obtenerMisPrestamos(Long usuarioId, Pageable pageable) {
-        Usuario usuario = usuarioRepository.findById(usuarioId)
+        Usuario usuario = usuarioRepository.findById(Objects.requireNonNull(usuarioId, "usuarioId requerido"))
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario not found"));
-        
+
         List<TicketPrestamo> todoPrestamos = ticketPrestamoRepository.findAll();
         List<TicketPrestamo> misPrestamos = todoPrestamos.stream()
                 .filter(p -> p.getResponsable().equals(usuario))
                 .collect(Collectors.toList());
-        
-        org.springframework.data.domain.PageImpl<TicketPrestamo> page = 
-                new org.springframework.data.domain.PageImpl<>(misPrestamos, pageable, misPrestamos.size());
+
+        Pageable safePageable = Objects.requireNonNull(pageable, "pageable requerido");
+        org.springframework.data.domain.PageImpl<TicketPrestamo> page
+                = new org.springframework.data.domain.PageImpl<>(misPrestamos, safePageable, misPrestamos.size());
         return page.map(this::mapToDTO);
     }
 
@@ -199,7 +203,8 @@ public class PrestamoService {
     public void eliminarPrestamo(Long prestamoId, Long usuarioId) {
         log.info("Eliminando préstamo: {} por usuario: {}", prestamoId, usuarioId);
 
-        TicketPrestamo prestamo = ticketPrestamoRepository.findById(prestamoId)
+        Long safePrestamoId = Objects.requireNonNull(prestamoId, "prestamoId requerido");
+        TicketPrestamo prestamo = ticketPrestamoRepository.findById(safePrestamoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Prestamo not found"));
 
         ticketPrestamoRepository.delete(prestamo);

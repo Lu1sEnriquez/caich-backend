@@ -39,13 +39,6 @@ public class EspacioService {
                 .collect(Collectors.toList());
     }
 
-    public List<EspacioDTO> obtenerEspaciosPorTipo(String tipo) {
-        List<Espacio> espacios = espacioRepository.findByTipo(tipo);
-        return espacios.stream()
-                .map(this::mapToDTO)
-                .collect(Collectors.toList());
-    }
-
     public List<EspacioDTO> obtenerEspaciosDisponiblesPorCapacidad(Integer capacidadMinima) {
         List<Espacio> espacios = espacioRepository.findEspaciosDisponiblesPorCapacidad(capacidadMinima);
         return espacios.stream()
@@ -66,13 +59,9 @@ public class EspacioService {
             throw new BusinessException("Ya existe un espacio con el nombre: " + crearEspacioDTO.getNombre());
         }
 
-        // Validar tipo de espacio
-        validarTipoEspacio(crearEspacioDTO.getTipo());
-
         // Crear espacio
         Espacio espacio = new Espacio();
         espacio.setNombre(crearEspacioDTO.getNombre());
-        espacio.setTipo(crearEspacioDTO.getTipo());
         espacio.setDescripcion(crearEspacioDTO.getDescripcion());
         espacio.setCapacidad(crearEspacioDTO.getCapacidad());
         espacio.setCostoPorHora(crearEspacioDTO.getCostoPorHora());
@@ -80,7 +69,7 @@ public class EspacioService {
 
         Espacio savedEspacio = espacioRepository.save(espacio);
 
-        log.info("Espacio creado: {} - {}", savedEspacio.getNombre(), savedEspacio.getTipo());
+        log.info("Espacio creado: {}", savedEspacio.getNombre());
 
         // Auditoría
         auditoriaService.registrarCambio("Espacios", savedEspacio.getEspacioId(), "Crear",
@@ -108,12 +97,6 @@ public class EspacioService {
         }
 
         // Actualizar otros campos
-        if (actualizarEspacioDTO.getTipo() != null) {
-            validarTipoEspacio(actualizarEspacioDTO.getTipo());
-            cambios += "Tipo: " + espacio.getTipo() + " -> " + actualizarEspacioDTO.getTipo() + "; ";
-            espacio.setTipo(actualizarEspacioDTO.getTipo());
-        }
-
         if (actualizarEspacioDTO.getDescripcion() != null) {
             cambios += "Descripcion actualizada; ";
             espacio.setDescripcion(actualizarEspacioDTO.getDescripcion());
@@ -180,7 +163,7 @@ public class EspacioService {
         // }
         espacioRepository.delete(espacio);
 
-        log.info("Espacio eliminado: {} - {}", espacio.getNombre(), espacio.getTipo());
+        log.info("Espacio eliminado: {}", espacio.getNombre());
 
         // Auditoría
         auditoriaService.registrarCambio("Espacios", espacioId, "Eliminar",
@@ -191,25 +174,11 @@ public class EspacioService {
         return espacioRepository.countByEstaActivoTrue();
     }
 
-    public List<String> obtenerTiposEspacio() {
-        return List.of("Cubículo", "Consultorio", "Sala", "Online");
-    }
-
-    // Métodos de validación
-    private void validarTipoEspacio(String tipo) {
-        List<String> tiposValidos = List.of("Cubículo", "Consultorio", "Sala", "Online");
-        if (!tiposValidos.contains(tipo)) {
-            throw new BusinessException("Tipo de espacio no válido: " + tipo
-                    + ". Tipos válidos: " + String.join(", ", tiposValidos));
-        }
-    }
-
     // Mapper
     private EspacioDTO mapToDTO(Espacio espacio) {
         return EspacioDTO.builder()
                 .espacioId(espacio.getEspacioId())
                 .nombre(espacio.getNombre())
-                .tipo(espacio.getTipo())
                 .descripcion(espacio.getDescripcion())
                 .capacidad(espacio.getCapacidad())
                 .costoPorHora(espacio.getCostoPorHora())

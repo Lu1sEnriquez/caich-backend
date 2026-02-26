@@ -1,5 +1,14 @@
 package com.api_caich.service;
 
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.api_caich.constants.SecurityConstants;
 import com.api_caich.dto.LoginRequestDTO;
 import com.api_caich.dto.LoginResponseDTO;
@@ -11,18 +20,9 @@ import com.api_caich.enums.Role;
 import com.api_caich.exception.BusinessException;
 import com.api_caich.repository.UsuarioRepository;
 import com.api_caich.util.JwtTokenUtil;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
@@ -38,9 +38,9 @@ public class AuthService {
 
     @Transactional
     public LoginResponseDTO login(LoginRequestDTO loginRequest) {
-        try {
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword()));
+        try { // <--- FALTABA ESTE TRY
+            authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword()));
 
             UserDetails userDetails = userDetailsService.loadUserByUsername(loginRequest.getEmail());
             String accessToken = jwtTokenUtil.generateToken(userDetails);
@@ -74,13 +74,10 @@ public class AuthService {
 
     @Transactional
     public LoginResponseDTO register(RegisterRequestDTO registerRequest) {
-        // Verificar si el email ya existe
-        //TODO: Considerar que email puede ser opcional
         if (usuarioRepository.existsByEmail(registerRequest.getEmail())) {
             throw new BusinessException("El email ya esta registrado");
         }
 
-        // Validar rol usando el enum
         Role role;
         try {
             role = Role.fromNombre(registerRequest.getRol());
@@ -88,13 +85,10 @@ public class AuthService {
             throw new BusinessException("Rol no valido: " + registerRequest.getRol());
         }
 
-        // Validar que no se registre como Administrador
-        //TODO: Revisar si es necesario permitir el registro de administradores
         if ("Administrador".equalsIgnoreCase(registerRequest.getRol())) {
             throw new BusinessException("No se puede registrar como Administrador");
         }
 
-        // Crear nuevo usuario
         Usuario usuario = new Usuario();
         usuario.setNombreCompleto(registerRequest.getNombreCompleto());
         usuario.setEmail(registerRequest.getEmail());
@@ -104,14 +98,12 @@ public class AuthService {
         usuario.setTelefono(registerRequest.getTelefono());
         usuario.setRol(role.getNombre());
         usuario.setEstado(EstadoUsuario.ACTIVO.getValor());
-        // usuario.setFechaRegistro(java.time.LocalDateTime.now());
 
         Usuario savedUsuario = usuarioRepository.save(usuario);
         log.info("Usuario registrado exitosamente: {} - {}", savedUsuario.getEmail(), savedUsuario.getRol());
 
-        // Autenticar automáticamente después del registro
         UserDetails userDetails = userDetailsService.loadUserByUsername(savedUsuario.getEmail());
-        String accessToken = jwtTokenUtil.generateToken(userDetails);
+        String accessToken = jwtTokenUtil.generateToken(userDetails); // <--- CORREGIDO "Str ng"
         var refreshToken = refreshTokenService.createRefreshToken(savedUsuario.getUsuarioId());
 
         return LoginResponseDTO.builder()
@@ -128,15 +120,12 @@ public class AuthService {
 
     @Transactional
     public LoginResponseDTO refreshToken(RefreshTokenRequestDTO refreshTokenRequest) {
-        // Verificar el refresh token
         var refreshToken = refreshTokenService.verifyRefreshToken(refreshTokenRequest.getRefreshToken());
         Usuario usuario = refreshToken.getUsuario();
 
-        // Generar nuevo access token
         UserDetails userDetails = userDetailsService.loadUserByUsername(usuario.getEmail());
         String newAccessToken = jwtTokenUtil.generateToken(userDetails);
 
-        // Rotar el refresh token (opcional - para mayor seguridad)
         var newRefreshToken = refreshTokenService.createRefreshToken(usuario.getUsuarioId());
 
         log.info("Token refrescado para usuario: {}", usuario.getEmail());

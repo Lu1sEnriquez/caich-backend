@@ -94,19 +94,27 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
 
     // ========== QUERY DE FILTROS COMPLEJA ==========
     /**
-     * Buscar tickets con múltiples filtros (Admin) Incluye filtros por
-     * paciente/terapeuta (via cita), estados, fechas
+     * Buscar tickets con múltiples filtros (Admin)
+     * Incluye tickets con citas Y préstamos de cubículos sin cita
      */
     @Query("""
         SELECT DISTINCT t FROM Ticket t 
         LEFT JOIN t.cita c 
+        LEFT JOIN t.espacios te
         WHERE (:estadoTicket IS NULL OR t.estadoTicket = :estadoTicket)
         AND (:estadoFinanciero IS NULL OR t.estadoFinanciero = :estadoFinanciero)
         AND (:pacienteId IS NULL OR c.paciente.usuarioId = :pacienteId)
         AND (:terapeutaId IS NULL OR c.terapeuta.usuarioId = :terapeutaId)
-        AND (:fechaInicio IS NULL OR t.fechaCreacion >= :fechaInicio)
-        AND (:fechaFin IS NULL OR t.fechaCreacion <= :fechaFin)
-        ORDER BY t.fechaCreacion DESC
+        AND (
+            :fechaInicio IS NULL 
+            OR c.fechaInicio >= :fechaInicio 
+            OR (c IS NULL AND te.horaInicioReserva >= :fechaInicio)
+        )
+        AND (
+            :fechaFin IS NULL 
+            OR c.fechaInicio <= :fechaFin 
+            OR (c IS NULL AND te.horaInicioReserva <= :fechaFin)
+        )
     """)
     Page<Ticket> findWithFilters(
             @Param("pacienteId") Long pacienteId,
@@ -120,15 +128,27 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
 
     /**
      * Buscar tickets de un paciente con filtros
+     * Incluye citas donde es paciente Y préstamos de cubículos que creó
      */
     @Query("""
         SELECT DISTINCT t FROM Ticket t 
         LEFT JOIN t.cita c 
-        WHERE c.paciente.usuarioId = :pacienteId
+        LEFT JOIN t.espacios te
+        WHERE (
+            c.paciente.usuarioId = :pacienteId
+            OR (c IS NULL AND t.creadoPor.usuarioId = :pacienteId)
+        )
         AND (:estadoTicket IS NULL OR t.estadoTicket = :estadoTicket)
-        AND (:fechaInicio IS NULL OR t.fechaCreacion >= :fechaInicio)
-        AND (:fechaFin IS NULL OR t.fechaCreacion <= :fechaFin)
-        ORDER BY t.fechaCreacion DESC
+        AND (
+            :fechaInicio IS NULL 
+            OR c.fechaInicio >= :fechaInicio 
+            OR (c IS NULL AND te.horaInicioReserva >= :fechaInicio)
+        )
+        AND (
+            :fechaFin IS NULL 
+            OR c.fechaInicio <= :fechaFin 
+            OR (c IS NULL AND te.horaInicioReserva <= :fechaFin)
+        )
     """)
     Page<Ticket> findByPacienteWithFilters(
             @Param("pacienteId") Long pacienteId,
@@ -140,15 +160,27 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
 
     /**
      * Buscar tickets de un terapeuta con filtros
+     * Incluye citas donde es terapeuta Y préstamos de cubículos que creó
      */
     @Query("""
         SELECT DISTINCT t FROM Ticket t 
         LEFT JOIN t.cita c 
-        WHERE c.terapeuta.usuarioId = :terapeutaId
+        LEFT JOIN t.espacios te
+        WHERE (
+            c.terapeuta.usuarioId = :terapeutaId
+            OR (c IS NULL AND t.creadoPor.usuarioId = :terapeutaId)
+        )
         AND (:estadoTicket IS NULL OR t.estadoTicket = :estadoTicket)
-        AND (:fechaInicio IS NULL OR t.fechaCreacion >= :fechaInicio)
-        AND (:fechaFin IS NULL OR t.fechaCreacion <= :fechaFin)
-        ORDER BY t.fechaCreacion DESC
+        AND (
+            :fechaInicio IS NULL 
+            OR c.fechaInicio >= :fechaInicio 
+            OR (c IS NULL AND te.horaInicioReserva >= :fechaInicio)
+        )
+        AND (
+            :fechaFin IS NULL 
+            OR c.fechaInicio <= :fechaFin 
+            OR (c IS NULL AND te.horaInicioReserva <= :fechaFin)
+        )
     """)
     Page<Ticket> findByTerapeutaWithFilters(
             @Param("terapeutaId") Long terapeutaId,
@@ -168,4 +200,26 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
             + "WHERE Folio LIKE 'TKT-' + FORMAT(GETDATE(), 'yyyyMM') + '-%'",
             nativeQuery = true)
     int findMaxSequenceForCurrentMonth();
+
+    // ========== CONSULTAS PARA DISPONIBILIDAD DE HORARIOS ==========
+    /**
+     * Buscar citas de un espacio en un rango de fechas para validar disponibilidad
+     */
+    @Query("""
+        SELECT c FROM TicketCita c 
+        JOIN c.ticket t 
+        JOIN t.espacios te 
+        WHERE te.espacio.espacioId = :espacioId
+        AND c.fechaInicio < :fechaFin 
+        AND c.fechaFin > :fechaInicio
+        AND t.estadoTicket != 'CANCELADO'
+        ORDER BY c.fechaInicio
+    """)
+    List<com.api_caich.entity.TicketCita> findCitasByEspacioAndFechaRange(
+            @Param("espacioId") Long espacioId,
+            @Param("fechaInicio") LocalDateTime fechaInicio,
+            @Param("fechaFin") LocalDateTime fechaFin
+    );
+
 }
+
