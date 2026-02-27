@@ -1,5 +1,6 @@
 package com.api_caich.dto.ticket;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import jakarta.validation.constraints.NotNull;
@@ -35,4 +36,10 @@ public class TicketPrestamoDTO {
     private LocalDateTime fechaDevolucionReal;
 
     private String estado;
+    
+    // NUEVO: Costo unitario del préstamo (opcional, NULL = gratis)
+    private BigDecimal costoUnitario;
+    
+    // NUEVO: Observaciones al devolver
+    private String observacionesDevolucion;
 }

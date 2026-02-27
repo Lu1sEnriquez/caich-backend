@@ -52,4 +52,10 @@ public class TicketPrestamo {
     @Column(name = "Estado", length = 20)
     @Enumerated(EnumType.STRING)
     private EstadoPrestamo estado = EstadoPrestamo.ACTIVO;
+
+    @Column(name = "CostoUnitario", precision = 10, scale = 2)
+    private java.math.BigDecimal costoUnitario; // NULL = Gratis, si tiene valor = cobrable
+
+    @Column(name = "ObservacionesDevolucion", length = 500)
+    private String observacionesDevolucion; // Notas al devolver el préstamo
 }

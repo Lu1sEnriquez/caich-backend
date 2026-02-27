@@ -16,6 +16,7 @@ import com.api_caich.entity.Producto;
 import com.api_caich.entity.Ticket;
 import com.api_caich.entity.TicketPrestamo;
 import com.api_caich.entity.Usuario;
+import com.api_caich.enums.EstadoFinanciero;
 import com.api_caich.enums.EstadoPrestamo;
 import com.api_caich.enums.EstadoTicket;
 import com.api_caich.exception.BusinessException;
@@ -24,6 +25,7 @@ import com.api_caich.repository.ProductoRepository;
 import com.api_caich.repository.TicketPrestamoRepository;
 import com.api_caich.repository.TicketRepository;
 import com.api_caich.repository.UsuarioRepository;
+import com.api_caich.util.FolioGenerator;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +40,7 @@ public class PrestamoService {
     private final UsuarioRepository usuarioRepository;
     private final ProductoRepository productoRepository;
     private final AuditoriaService auditoriaService;
+    private final FolioGenerator folioGenerator;
 
     @Transactional
     public PrestamoDTO crearPrestamo(CrearPrestamoDTO prestamoDTO, Long usuarioId) {
@@ -45,6 +48,10 @@ public class PrestamoService {
 
         Usuario usuario = usuarioRepository.findById(Objects.requireNonNull(usuarioId, "usuarioId requerido"))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        Long responsableId = Objects.requireNonNull(prestamoDTO.getAlumnoId(), "alumnoId requerido");
+        Usuario responsable = usuarioRepository.findById(responsableId)
+            .orElseThrow(() -> new ResourceNotFoundException("Responsable no encontrado"));
 
         Long productoId = Objects.requireNonNull(prestamoDTO.getProductoId(), "productoId requerido");
         Producto producto = productoRepository.findById(productoId)
@@ -59,20 +66,33 @@ public class PrestamoService {
         }
 
         // Create ticket for loan
+        String folio = folioGenerator.generarFolioTicket();
         Ticket ticket = new Ticket();
+        ticket.setFolio(folio);
         ticket.setCreadoPor(usuario);
         ticket.setEstadoTicket(EstadoTicket.BORRADOR);
-        ticket.setMontoTotal(producto.getPrecio());
+        ticket.setEstadoFinanciero(EstadoFinanciero.PENDIENTE);
+        ticket.setCostoAdicional(java.math.BigDecimal.ZERO);
+        ticket.setMontoPagado(java.math.BigDecimal.ZERO);
+        // Costo total = precio del producto + costoUnitario del préstamo (si existe)
+        java.math.BigDecimal montoTotal = producto.getPrecio();
+        if (prestamoDTO.getCostoUnitario() != null) {
+            montoTotal = montoTotal.add(prestamoDTO.getCostoUnitario());
+        }
+        ticket.setMontoTotal(montoTotal);
         ticket = ticketRepository.save(ticket);
 
         // Create TicketPrestamo
         TicketPrestamo prestamo = new TicketPrestamo();
         prestamo.setTicket(ticket);
         prestamo.setProducto(producto);
-        prestamo.setResponsable(usuario);
-        prestamo.setFechaPrestamo(LocalDateTime.now());
+        prestamo.setResponsable(responsable);
+        prestamo.setFechaPrestamo(prestamoDTO.getFechaPrestamo() != null
+            ? prestamoDTO.getFechaPrestamo()
+            : LocalDateTime.now());
         prestamo.setFechaDevolucionEstimada(prestamoDTO.getFechaDevolucionEstimada());
         prestamo.setEstado(EstadoPrestamo.ACTIVO);
+        prestamo.setCostoUnitario(prestamoDTO.getCostoUnitario()); // Puede ser NULL si es gratis
 
         prestamo = ticketPrestamoRepository.save(prestamo);
 
@@ -87,6 +107,60 @@ public class PrestamoService {
         log.info("Prestamo creado: {} para producto: {}", prestamo.getId(), producto.getNombre());
 
         return mapToDTO(prestamo);
+    }
+
+    public Page<PrestamoDTO> obtenerPrestamos(String estado, Pageable pageable) {
+        EstadoPrestamo estadoPrestamo = parseEstado(estado);
+        if (estadoPrestamo == null) {
+            return ticketPrestamoRepository.findAll(pageable).map(this::mapToDTO);
+        }
+        return ticketPrestamoRepository.findByEstado(estadoPrestamo, pageable).map(this::mapToDTO);
+    }
+
+    @Transactional
+    public PrestamoDTO actualizarPrestamo(Long prestamoId, CrearPrestamoDTO prestamoDTO, Long usuarioId) {
+        TicketPrestamo prestamo = ticketPrestamoRepository.findById(
+                Objects.requireNonNull(prestamoId, "prestamoId requerido"))
+                .orElseThrow(() -> new ResourceNotFoundException("Prestamo not found"));
+
+        Long productoId = Objects.requireNonNull(prestamoDTO.getProductoId(), "productoId requerido");
+        Producto producto = productoRepository.findById(productoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+
+        if (!Boolean.TRUE.equals(producto.getEsPrestable())) {
+            throw new BusinessException("El producto no es prestable: " + producto.getNombre());
+        }
+
+        Long responsableId = Objects.requireNonNull(prestamoDTO.getAlumnoId(), "alumnoId requerido");
+        Usuario responsable = usuarioRepository.findById(responsableId)
+                .orElseThrow(() -> new ResourceNotFoundException("Responsable no encontrado"));
+
+        if (prestamo.getProducto() != null && !prestamo.getProducto().getProductoId().equals(productoId)) {
+            // Regresar stock del producto anterior
+            Producto anterior = prestamo.getProducto();
+            anterior.setStock(anterior.getStock() + 1);
+            productoRepository.save(anterior);
+
+            // Validar stock del nuevo producto
+            if (producto.getStock() <= 0) {
+                throw new BusinessException("Stock insuficiente para préstamo: " + producto.getNombre());
+            }
+            producto.setStock(producto.getStock() - 1);
+            productoRepository.save(producto);
+        }
+
+        prestamo.setProducto(producto);
+        prestamo.setResponsable(responsable);
+        prestamo.setFechaPrestamo(prestamoDTO.getFechaPrestamo());
+        prestamo.setFechaDevolucionEstimada(prestamoDTO.getFechaDevolucionEstimada());
+        prestamo.setCostoUnitario(prestamoDTO.getCostoUnitario());
+
+        TicketPrestamo actualizado = ticketPrestamoRepository.save(prestamo);
+
+        auditoriaService.registrarCambio("Prestamos", prestamoId, "Actualizar",
+                "Préstamo actualizado", null, null, usuarioId, "SYSTEM");
+
+        return mapToDTO(actualizado);
     }
 
     @Transactional
@@ -109,6 +183,7 @@ public class PrestamoService {
 
         prestamo.setFechaDevolucionReal(LocalDateTime.now());
         prestamo.setEstado(EstadoPrestamo.DEVUELTO);
+        prestamo.setObservacionesDevolucion(observaciones); // Guardar observaciones de devolución
 
         prestamo = ticketPrestamoRepository.save(prestamo);
 
@@ -223,6 +298,18 @@ public class PrestamoService {
                 .fechaDevolucionEstimada(prestamo.getFechaDevolucionEstimada())
                 .fechaDevolucionReal(prestamo.getFechaDevolucionReal())
                 .estadoPrestamo(prestamo.getEstado() != null ? prestamo.getEstado().getDescripcion() : null)
+                .costoUnitario(prestamo.getCostoUnitario()) // Incluir costo
+                .observacionesDevolucion(prestamo.getObservacionesDevolucion()) // Incluir observaciones
                 .build();
+    }
+
+    private EstadoPrestamo parseEstado(String estado) {
+        if (estado == null || estado.isBlank()) return null;
+        for (EstadoPrestamo e : EstadoPrestamo.values()) {
+            if (e.name().equalsIgnoreCase(estado) || e.getDescripcion().equalsIgnoreCase(estado)) {
+                return e;
+            }
+        }
+        return null;
     }
 }

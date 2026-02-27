@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.core.io.Resource;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -30,6 +29,8 @@ import com.api_caich.dto.DataResponseDTO;
 import com.api_caich.dto.pago.PagoDTO;
 import com.api_caich.dto.pago.PagoMultipartRequestDTO;
 import com.api_caich.dto.pago.PagoRequestDTO;
+import com.api_caich.dto.pago.SincronizacionPreviewDTO;
+import com.api_caich.dto.pago.SincronizacionResultadoDTO;
 import com.api_caich.dto.pago.SyncFormsRequestDTO;
 import com.api_caich.entity.Pago;
 import com.api_caich.enums.EstadoPagoTransaccion;
@@ -240,8 +241,50 @@ public class PagoController {
                 pagoDTO, "Pago manual registrado y aprobado."));
     }
 
+    @PostMapping("/sincronizar-forms/preview")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(
+        summary = "Previsualizar sincronización de Google Forms",
+        description = "Analiza el CSV de Google Forms y retorna un preview detallado de qué pagos se pueden sincronizar y cuáles tienen errores, sin guardar nada en la BD"
+    )
+    public ResponseEntity<DataResponseDTO<SincronizacionPreviewDTO>> previsualizarSincronizacion() {
+        SincronizacionPreviewDTO preview = googleFormsSyncService.previsualizarSincronizacion();
+        
+        String mensaje = String.format(
+            "Preview generado: %d válidos, %d con errores, %d duplicados de %d registros totales",
+            preview.getTotalValidos(),
+            preview.getTotalErrores(),
+            preview.getTotalDuplicados(),
+            preview.getTotalRegistros()
+        );
+        
+        return ResponseEntity.ok(DataResponseDTO.success(preview, mensaje));
+    }
+
+    @PostMapping("/sincronizar-forms/confirmar")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(
+        summary = "Confirmar y ejecutar sincronización",
+        description = "Ejecuta la sincronización de los pagos válidos detectados en el preview. Solo sincroniza registros sin errores."
+    )
+    public ResponseEntity<DataResponseDTO<SincronizacionResultadoDTO>> confirmarSincronizacion(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        
+        SincronizacionResultadoDTO resultado = googleFormsSyncService.confirmarSincronizacion(userDetails.getId());
+        
+        return ResponseEntity.ok(DataResponseDTO.success(resultado, resultado.getMensaje()));
+    }
+
+    /**
+     * @deprecated Usar /sincronizar-forms/preview y /sincronizar-forms/confirmar en su lugar
+     */
+    @Deprecated
     @PostMapping("/sincronizar-forms")
     @PreAuthorize("hasRole('ADMIN')")
+    @Operation(
+        summary = "[DEPRECATED] Sincronizar Google Forms",
+        description = "Método legacy - use /sincronizar-forms/preview y /sincronizar-forms/confirmar para mejor control"
+    )
     public ResponseEntity<DataResponseDTO<String>> sincronizarForms(
             @RequestBody(required = false) SyncFormsRequestDTO request,
             @AuthenticationPrincipal CustomUserDetails userDetails) {

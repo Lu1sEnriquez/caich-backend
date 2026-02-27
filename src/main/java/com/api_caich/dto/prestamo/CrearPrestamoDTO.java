@@ -1,11 +1,12 @@
 package com.api_caich.dto.prestamo;
 
-import jakarta.validation.constraints.Future;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
-
-import java.time.LocalDateTime;
 
 @Data
 public class CrearPrestamoDTO {
@@ -22,7 +23,7 @@ public class CrearPrestamoDTO {
     private LocalDateTime fechaPrestamo;
 
     @NotNull(message = "Fecha devolucion estimada is required")
-    @Future(message = "Fecha devolucion estimada must be in the future")
+    @FutureOrPresent(message = "Fecha devolucion estimada must be now or in the future")
     private LocalDateTime fechaDevolucionEstimada;
 
     @NotNull(message = "Cantidad is required")
@@ -30,4 +31,7 @@ public class CrearPrestamoDTO {
     private Integer cantidad;
 
     private String observaciones;
+    
+    // NUEVO: Costo unitario del préstamo (opcional, NULL = gratis)
+    private BigDecimal costoUnitario;
 }

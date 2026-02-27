@@ -1,5 +1,6 @@
 package com.api_caich.dto.prestamo;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
@@ -17,6 +18,12 @@ public class PrestamoDTO {
     private LocalDateTime fechaDevolucionEstimada;
     private LocalDateTime fechaDevolucionReal;
     private String estadoPrestamo;
+    
+    // NUEVO: Costo unitario del préstamo (puede ser NULL si es gratis)
+    private BigDecimal costoUnitario;
+    
+    // NUEVO: Observaciones de la devolución
+    private String observacionesDevolucion;
 
     public Integer getDiasVencidos() {
         if ("Activo".equals(estadoPrestamo) && fechaDevolucionEstimada != null) {
