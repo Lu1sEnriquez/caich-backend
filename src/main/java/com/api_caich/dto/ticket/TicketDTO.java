@@ -108,6 +108,9 @@ public class TicketDTO {
                     .horaInicioReserva(espacio.getHoraInicioReserva())
                     .horaFinReserva(espacio.getHoraFinReserva())
                     .costoCobrado(espacio.getCostoCobrado())
+                    .celular(espacio.getCelular())
+                    .actividad(espacio.getActividad())
+                    .maestro(espacio.getMaestro())
                     .build())
                     .collect(Collectors.toList());
         }

@@ -11,19 +11,19 @@ import com.api_caich.repository.TicketRepository;
 public class FolioGenerator {
 
     private final TicketRepository ticketRepository;
-    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyyMM");
+    private static final DateTimeFormatter YEAR_FORMATTER = DateTimeFormatter.ofPattern("yy");
 
     public FolioGenerator(TicketRepository ticketRepository) {
         this.ticketRepository = ticketRepository;
     }
 
+    /**
+     * Genera folio con formato YYNNNN (ej: 260001).
+     * Secuencia de 4 dígitos que se reinicia cada año (máx 9999 tickets/año).
+     */
     public String generarFolioTicket() {
-        String timestamp = LocalDateTime.now().format(FORMATTER);
-
-        // Consultamos el máximo actual en la BD justo antes de generar el nuevo
-        int nextSequence = ticketRepository.findMaxSequenceForCurrentMonth() + 1;
-
-        return String.format("TKT-%s-%04d", timestamp, nextSequence);
+        String yearPrefix = LocalDateTime.now().format(YEAR_FORMATTER);
+        int nextSequence = ticketRepository.findMaxSequenceForCurrentYear() + 1;
+        return String.format("%s%04d", yearPrefix, nextSequence);
     }
-
 }

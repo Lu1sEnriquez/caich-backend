@@ -29,9 +29,9 @@ import com.api_caich.dto.DataResponseDTO;
 import com.api_caich.dto.pago.PagoDTO;
 import com.api_caich.dto.pago.PagoMultipartRequestDTO;
 import com.api_caich.dto.pago.PagoRequestDTO;
+import com.api_caich.dto.pago.SincronizacionAjustesRequestDTO;
 import com.api_caich.dto.pago.SincronizacionPreviewDTO;
 import com.api_caich.dto.pago.SincronizacionResultadoDTO;
-import com.api_caich.dto.pago.SyncFormsRequestDTO;
 import com.api_caich.entity.Pago;
 import com.api_caich.enums.EstadoPagoTransaccion;
 import com.api_caich.security.CustomUserDetails;
@@ -261,6 +261,32 @@ public class PagoController {
         return ResponseEntity.ok(DataResponseDTO.success(preview, mensaje));
     }
 
+    @PostMapping("/sincronizar-forms/preview-ajustes")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(
+        summary = "Previsualizar sincronización con ajustes",
+        description = "Analiza el CSV aplicando ajustes temporales hechos en el review para mostrar un preview actualizado sin guardar nada en BD"
+    )
+    public ResponseEntity<DataResponseDTO<SincronizacionPreviewDTO>> previsualizarSincronizacionConAjustes(
+            @RequestBody(required = false) SincronizacionAjustesRequestDTO request) {
+
+        SincronizacionAjustesRequestDTO payload = request == null
+                ? SincronizacionAjustesRequestDTO.builder().build()
+                : request;
+
+        SincronizacionPreviewDTO preview = googleFormsSyncService.previsualizarSincronizacionConAjustes(payload.getAjustes());
+
+        String mensaje = String.format(
+            "Preview con ajustes: %d válidos, %d con errores, %d duplicados de %d registros totales",
+            preview.getTotalValidos(),
+            preview.getTotalErrores(),
+            preview.getTotalDuplicados(),
+            preview.getTotalRegistros()
+        );
+
+        return ResponseEntity.ok(DataResponseDTO.success(preview, mensaje));
+    }
+
     @PostMapping("/sincronizar-forms/confirmar")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(
@@ -275,22 +301,23 @@ public class PagoController {
         return ResponseEntity.ok(DataResponseDTO.success(resultado, resultado.getMensaje()));
     }
 
-    /**
-     * @deprecated Usar /sincronizar-forms/preview y /sincronizar-forms/confirmar en su lugar
-     */
-    @Deprecated
-    @PostMapping("/sincronizar-forms")
+    @PostMapping("/sincronizar-forms/confirmar-ajustes")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(
-        summary = "[DEPRECATED] Sincronizar Google Forms",
-        description = "Método legacy - use /sincronizar-forms/preview y /sincronizar-forms/confirmar para mejor control"
+        summary = "Confirmar y ejecutar sincronización con ajustes",
+        description = "Ejecuta la sincronización aplicando ajustes temporales del review. Solo sincroniza registros válidos después de validar los ajustes."
     )
-    public ResponseEntity<DataResponseDTO<String>> sincronizarForms(
-            @RequestBody(required = false) SyncFormsRequestDTO request,
-            @AuthenticationPrincipal CustomUserDetails userDetails) {
+    public ResponseEntity<DataResponseDTO<SincronizacionResultadoDTO>> confirmarSincronizacionConAjustes(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestBody(required = false) SincronizacionAjustesRequestDTO request) {
 
-        googleFormsSyncService.sincronizarDesdeForms(userDetails.getId());
+        SincronizacionAjustesRequestDTO payload = request == null
+                ? SincronizacionAjustesRequestDTO.builder().build()
+                : request;
 
-        return ResponseEntity.ok(DataResponseDTO.success(null, "Pagos sincronizados correctamente"));
+        SincronizacionResultadoDTO resultado = googleFormsSyncService
+                .confirmarSincronizacionConAjustes(userDetails.getId(), payload.getAjustes());
+
+        return ResponseEntity.ok(DataResponseDTO.success(resultado, resultado.getMensaje()));
     }
 }

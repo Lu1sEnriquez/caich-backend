@@ -3,7 +3,11 @@ package com.api_caich.service;
 import java.io.StringReader;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -15,6 +19,7 @@ import org.springframework.web.client.RestTemplate;
 
 import com.api_caich.dto.pago.ErrorSincronizacionDTO;
 import com.api_caich.dto.pago.PagoSincronizacionDTO;
+import com.api_caich.dto.pago.SincronizacionAjusteRegistroDTO;
 import com.api_caich.dto.pago.SincronizacionPreviewDTO;
 import com.api_caich.dto.pago.SincronizacionResultadoDTO;
 import com.api_caich.entity.Configuracion;
@@ -22,6 +27,7 @@ import com.api_caich.entity.Ticket;
 import com.api_caich.enums.MetodoPago;
 import com.api_caich.exception.BusinessException;
 import com.api_caich.repository.ConfiguracionRepository;
+import com.api_caich.repository.PagoRepository;
 import com.api_caich.repository.TicketRepository;
 import com.opencsv.CSVReader;
 
@@ -34,6 +40,7 @@ import lombok.extern.slf4j.Slf4j;
 public class GoogleFormsSyncService {
 
     private final PagoService pagoService;
+    private final PagoRepository pagoRepository;
     private final TicketRepository ticketRepository;
     private final RestTemplate restTemplate;
     private final ConfiguracionRepository configRepository;
@@ -51,10 +58,18 @@ public class GoogleFormsSyncService {
      * Valida todos los registros y retorna qué se va a sincronizar
      */
     public SincronizacionPreviewDTO previsualizarSincronizacion() {
+        return previsualizarSincronizacionConAjustes(Collections.emptyList());
+    }
+
+    /**
+     * Previsualiza la sincronización aplicando ajustes temporales del review.
+     */
+    public SincronizacionPreviewDTO previsualizarSincronizacionConAjustes(List<SincronizacionAjusteRegistroDTO> ajustes) {
         try {
             log.info("Iniciando previsualización de sincronización desde Google Sheets...");
 
             String csvContent = descargarCSV();
+            Map<String, SincronizacionAjusteRegistroDTO> ajustesPorMarcaTemporal = indexarAjustes(ajustes);
             
             try (CSVReader reader = new CSVReader(new StringReader(csvContent))) {
                 List<String[]> filas = reader.readAll();
@@ -64,7 +79,8 @@ public class GoogleFormsSyncService {
                 int totalDuplicados = 0;
 
                 for (int i = 1; i < filas.size(); i++) {
-                    String[] fila = filas.get(i);
+                    String[] filaOriginal = filas.get(i);
+                    String[] fila = aplicarAjustesFila(filaOriginal, ajustesPorMarcaTemporal);
 
                     if (fila.length < 9) {
                         PagoSincronizacionDTO error = PagoSincronizacionDTO.builder()
@@ -108,10 +124,23 @@ public class GoogleFormsSyncService {
      */
     @Transactional
     public SincronizacionResultadoDTO confirmarSincronizacion(Long adminId) {
+        return ejecutarSincronizacion(previsualizarSincronizacion(), adminId);
+    }
+
+    /**
+     * Confirma y ejecuta la sincronización aplicando ajustes temporales del review.
+     */
+    @Transactional
+    public SincronizacionResultadoDTO confirmarSincronizacionConAjustes(
+            Long adminId,
+            List<SincronizacionAjusteRegistroDTO> ajustes
+    ) {
+        return ejecutarSincronizacion(previsualizarSincronizacionConAjustes(ajustes), adminId);
+    }
+
+    private SincronizacionResultadoDTO ejecutarSincronizacion(SincronizacionPreviewDTO preview, Long adminId) {
         try {
             log.info("Iniciando sincronización confirmada desde Google Sheets...");
-
-            SincronizacionPreviewDTO preview = previsualizarSincronizacion();
             
             List<String> foliosSincronizados = new ArrayList<>();
             List<ErrorSincronizacionDTO> errores = new ArrayList<>();
@@ -121,7 +150,8 @@ public class GoogleFormsSyncService {
                 try {
                     log.info("Sincronizando folio: {}", pago.getFolio());
                     
-                    String notas = "Sincronizado vía Google Forms. Reportado por: " + pago.getNombrePaciente();
+                    String syncKey = "[GFORMS:" + pago.getMarcaTemporal() + "]";
+                    String notas = syncKey + " Reportado por: " + pago.getNombrePaciente();
                     
                     pagoService.registrarPagoConComprobante(
                             pago.getTicketId(),
@@ -169,33 +199,106 @@ public class GoogleFormsSyncService {
         }
     }
 
-    /**
-     * Método legacy - mantiene compatibilidad con código existente
-     * @deprecated Use previsualizarSincronizacion() y confirmarSincronizacion() en su lugar
-     */
-    @Deprecated
-    public void sincronizarDesdeForms(Long adminId) {
-        log.warn("Usando método legacy sincronizarDesdeForms - considere usar el nuevo flujo de preview/confirmación");
-        confirmarSincronizacion(adminId);
+    private Map<String, SincronizacionAjusteRegistroDTO> indexarAjustes(List<SincronizacionAjusteRegistroDTO> ajustes) {
+        Map<String, SincronizacionAjusteRegistroDTO> ajustesPorMarcaTemporal = new HashMap<>();
+        if (ajustes == null) {
+            return ajustesPorMarcaTemporal;
+        }
+
+        for (SincronizacionAjusteRegistroDTO ajuste : ajustes) {
+            if (ajuste == null || ajuste.getMarcaTemporal() == null) {
+                continue;
+            }
+            String marcaTemporal = ajuste.getMarcaTemporal().trim();
+            if (!marcaTemporal.isEmpty()) {
+                ajustesPorMarcaTemporal.put(marcaTemporal, ajuste);
+            }
+        }
+
+        return ajustesPorMarcaTemporal;
+    }
+
+    private String[] aplicarAjustesFila(
+            String[] filaOriginal,
+            Map<String, SincronizacionAjusteRegistroDTO> ajustesPorMarcaTemporal
+    ) {
+        if (filaOriginal == null || filaOriginal.length == 0) {
+            return filaOriginal;
+        }
+
+        String[] fila = Arrays.copyOf(filaOriginal, filaOriginal.length);
+        String marcaTemporal = fila[0] == null ? "" : fila[0].trim();
+        if (marcaTemporal.isEmpty()) {
+            return fila;
+        }
+
+        SincronizacionAjusteRegistroDTO ajuste = ajustesPorMarcaTemporal.get(marcaTemporal);
+        if (ajuste == null) {
+            return fila;
+        }
+
+        // Aplicar todos los ajustes disponibles
+        if (ajuste.getEmail() != null) {
+            fila[1] = ajuste.getEmail().trim();
+        }
+        if (ajuste.getFolio() != null) {
+            fila[2] = ajuste.getFolio().trim();
+        }
+        if (ajuste.getNombrePaciente() != null) {
+            fila[3] = ajuste.getNombrePaciente().trim();
+        }
+        if (ajuste.getMonto() != null) {
+            fila[4] = ajuste.getMonto().trim();
+        }
+        if (ajuste.getMetodoPago() != null) {
+            fila[5] = ajuste.getMetodoPago().trim();
+        }
+        if (ajuste.getReferencia() != null) {
+            fila[6] = ajuste.getReferencia().trim();
+        }
+        if (ajuste.getComprobanteUrl() != null) {
+            fila[8] = ajuste.getComprobanteUrl().trim();
+        }
+
+        return fila;
     }
 
     /**
      * Valida un registro individual del CSV
      */
     private PagoSincronizacionDTO validarRegistro(String[] fila, int numeroFila) {
+        String marcaTemporal = fila[0].trim();
+        String email = fila[1].trim();
         String folio = fila[2].trim();
         String nombrePaciente = fila[3].trim();
         String montoRaw = fila[4].replaceAll("[^0-9.]", "");
         String metodoStr = fila[5].trim().toUpperCase();
         String referencia = fila[6].trim();
         String comprobanteUrlDrive = fila[8].trim();
+        String notasAdicionales = fila.length > 9 ? fila[9].trim() : "";
+        String comprobanteUrlLimpia = limpiarUrlDrive(comprobanteUrlDrive);
+        
+        // Parsear monto al inicio para que siempre esté disponible en la respuesta
+        BigDecimal monto = null;
+        try {
+            if (!montoRaw.isEmpty()) {
+                monto = new BigDecimal(montoRaw);
+            }
+        } catch (NumberFormatException e) {
+            // Si no se puede parsear, monto quedará null y se reportará en validación
+        }
 
         PagoSincronizacionDTO.PagoSincronizacionDTOBuilder builder = PagoSincronizacionDTO.builder()
                 .numeroFila(numeroFila)
+                .email(email)
                 .folio(folio)
                 .nombrePaciente(nombrePaciente)
+                .monto(monto)
                 .referencia(referencia)
                 .metodoPago(metodoStr)
+                .comprobanteUrl(comprobanteUrlLimpia)
+                .notasAdicionales(notasAdicionales)
+                .marcaTemporal(marcaTemporal)
                 .esValido(true)
                 .esDuplicado(false);
 
@@ -222,36 +325,29 @@ public class GoogleFormsSyncService {
                 .montoPagadoTicket(ticket.getMontoPagado());
 
         // Validación 3: Monto
-        BigDecimal monto;
-        try {
-            monto = new BigDecimal(montoRaw.isEmpty() ? "0" : montoRaw);
-            builder.monto(monto);
-            
-            if (monto.compareTo(BigDecimal.ZERO) <= 0) {
-                return builder
-                        .esValido(false)
-                        .mensajeError("El monto debe ser mayor a 0")
-                        .build();
-            }
-        } catch (NumberFormatException e) {
+        if (monto == null) {
             return builder
                     .esValido(false)
                     .mensajeError("Formato de monto inválido: " + fila[4])
                     .build();
         }
+        
+        if (monto.compareTo(BigDecimal.ZERO) <= 0) {
+            return builder
+                    .esValido(false)
+                    .mensajeError("El monto debe ser mayor a 0")
+                    .build();
+        }
 
-        // Validación 4: Verificar duplicados
-        boolean pagoYaExiste = ticket.getPagos() != null && 
-                ticket.getPagos().stream()
-                .anyMatch(p -> p.getMonto().compareTo(monto) == 0 
-                        && p.getReferencia() != null 
-                        && p.getReferencia().equals(referencia));
+        // Validación 4: Verificar duplicados por marca temporal (sync key)
+        String syncKey = "[GFORMS:" + marcaTemporal + "]";
+        boolean pagoYaExiste = pagoRepository.existsByNotasContaining(syncKey);
         
         if (pagoYaExiste) {
             return builder
                     .esValido(false)
                     .esDuplicado(true)
-                    .mensajeError("Pago duplicado - ya existe un pago con el mismo monto y referencia")
+                    .mensajeError("Pago ya sincronizado anteriormente")
                     .build();
         }
 
@@ -280,14 +376,12 @@ public class GoogleFormsSyncService {
         }
 
         // Validación 7: URL de comprobante
-        String comprobanteUrlLimpia = limpiarUrlDrive(comprobanteUrlDrive);
         if (comprobanteUrlLimpia == null || comprobanteUrlLimpia.isEmpty()) {
             return builder
                     .esValido(false)
                     .mensajeError("URL de comprobante inválida o vacía")
                     .build();
         }
-        builder.comprobanteUrl(comprobanteUrlLimpia);
 
         // Todo válido
         return builder.build();

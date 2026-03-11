@@ -29,6 +29,7 @@ import com.api_caich.entity.TicketPrestamo;
 import com.api_caich.entity.TicketVenta;
 import com.api_caich.entity.Usuario;
 import com.api_caich.enums.EstadoFinanciero;
+import com.api_caich.enums.EstadoPagoTransaccion;
 import com.api_caich.enums.EstadoPrestamo;
 import com.api_caich.enums.EstadoTicket;
 import com.api_caich.enums.Role;
@@ -223,6 +224,9 @@ public class TicketService {
                 ticketEspacio.setHoraInicioReserva(espacioDTO.getHoraInicioReserva());
                 ticketEspacio.setHoraFinReserva(espacioDTO.getHoraFinReserva());
                 ticketEspacio.setCostoCobrado(espacioDTO.getCostoCobrado());
+                ticketEspacio.setCelular(espacioDTO.getCelular());
+                ticketEspacio.setActividad(espacioDTO.getActividad());
+                ticketEspacio.setMaestro(espacioDTO.getMaestro());
                 ticket.getEspacios().add(ticketEspacio);
             }
         }
@@ -489,10 +493,13 @@ public class TicketService {
         // 8. Recalcular total
         ticket.recalcularTotal();
 
-        // 9. Guardar
+        // 9. Recalcular estado financiero basado en montoPagado vs montoTotal
+        recalcularEstadoFinanciero(ticket);
+
+        // 10. Guardar
         Ticket ticketActualizado = ticketRepository.save(ticket);
 
-        // 10. Auditoría
+        // 11. Auditoría
         auditoriaService.registrarCambio("Tickets", ticketId, "Actualizar",
                 "Ticket actualizado completamente", null, null, usuarioId, "SYSTEM");
 
@@ -794,6 +801,12 @@ public class TicketService {
                         usuarioId, estadoTicket, fechaInicio, fechaFin, pageable);
                 break;
 
+            case ALUMNO:
+                // Alumno solo puede ver tickets (reservas cubículos) que creó
+                tickets = ticketRepository.findByAlumnoWithFilters(
+                        usuarioId, estadoTicket, fechaInicio, fechaFin, pageable);
+                break;
+
             case ADMINISTRADOR:
                 // Admin puede ver todos los tickets con filtros opcionales
                 tickets = ticketRepository.findWithFilters(
@@ -801,7 +814,6 @@ public class TicketService {
                         fechaInicio, fechaFin, pageable);
                 break;
 
-            case ALUMNO:
             default:
                 throw new BusinessException("No tiene permisos para ver tickets");
         }
@@ -839,6 +851,12 @@ public class TicketService {
                         usuarioId, estadoTicket, fechaInicio, fechaFin, pageable);
                 break;
 
+            case ALUMNO:
+                // Alumno solo puede ver tickets (reservas cubículos) que creó
+                tickets = ticketRepository.findByAlumnoWithFilters(
+                        usuarioId, estadoTicket, fechaInicio, fechaFin, pageable);
+                break;
+
             case ADMINISTRADOR:
                 // Admin puede ver todos los tickets con filtros opcionales
                 tickets = ticketRepository.findWithFilters(
@@ -846,7 +864,6 @@ public class TicketService {
                         fechaInicio, fechaFin, pageable);
                 break;
 
-            case ALUMNO:
             default:
                 throw new BusinessException("No tiene permisos para ver tickets");
         }
@@ -914,6 +931,41 @@ public class TicketService {
     }
 
     /**
+     * Recalcular totales del ticket y estado financiero.
+     * Útil después de modificar productos, espacios o costos adicionales.
+     */
+    @Transactional
+    public TicketDTO recalcularTotalesTicket(Long ticketId, Long usuarioId) {
+        log.info("Recalculando totales para ticket: {}", ticketId);
+
+        Ticket ticket = ticketRepository.findById(Objects.requireNonNull(ticketId, "ticketId requerido"))
+                .orElseThrow(() -> new ResourceNotFoundException("Ticket no encontrado"));
+
+        if (ticket.getEstadoTicket() == EstadoTicket.CANCELADO) {
+            throw new BusinessException("No se puede recalcular un ticket cancelado");
+        }
+
+        // Recalcular monto total
+        ticket.recalcularTotal();
+
+        // Recalcular estado financiero basado en montoPagado vs montoTotal
+        recalcularEstadoFinanciero(ticket);
+
+        // Guardar cambios
+        Ticket ticketActualizado = ticketRepository.save(ticket);
+
+        // Auditoría
+        auditoriaService.registrarCambio("Tickets", ticketId, "RecalcularTotales",
+                "Totales recalculados manualmente", null, null, usuarioId, "SYSTEM");
+
+        log.info("Totales recalculados para ticket {}: montoTotal={}, montoPagado={}, saldoPendiente={}, estadoFinanciero={}",
+                ticketId, ticket.getMontoTotal(), ticket.getMontoPagado(), 
+                ticket.getSaldoPendiente(), ticket.getEstadoFinanciero());
+
+        return mapToDTO(ticketActualizado);
+    }
+
+    /**
      * Validar transiciones de estado permitidas
      */
     private void validarTransicionEstado(EstadoTicket estadoActual, EstadoTicket estadoNuevo) {
@@ -940,6 +992,41 @@ public class TicketService {
             }
             default -> {
             }
+        }
+    }
+
+    /**
+     * Recalcular estado financiero basado en montoPagado vs montoTotal.
+     * REGLA INMUTABLE: montoPagado = suma de pagos APROBADOS únicamente.
+     * 
+     * Estados financieros:
+     * - PENDIENTE: montoPagado = 0
+     * - PAGO_PARCIAL: 0 < montoPagado < montoTotal
+     * - PAGADO: montoPagado >= montoTotal (incluye sobrepagos)
+     * - EN_REVISION: hay pagos pendientes de verificación
+     */
+    private void recalcularEstadoFinanciero(Ticket ticket) {
+        BigDecimal montoPagado = ticket.getMontoPagado();
+        BigDecimal montoTotal = ticket.getMontoTotal();
+
+        // Si hay pagos en revisión, mantener ese estado
+        boolean tienePagosEnRevision = ticket.getPagos().stream()
+                .anyMatch(pago -> pago.getEstado() == EstadoPagoTransaccion.PENDIENTE_REVISION);
+
+        if (tienePagosEnRevision && montoPagado.compareTo(BigDecimal.ZERO) == 0) {
+            ticket.setEstadoFinanciero(EstadoFinanciero.EN_REVISION);
+            return;
+        }
+
+        // Calcular estado basado en montos
+        if (montoPagado.compareTo(BigDecimal.ZERO) == 0) {
+            ticket.setEstadoFinanciero(EstadoFinanciero.PENDIENTE);
+        } else if (montoPagado.compareTo(montoTotal) >= 0) {
+            // Incluye sobrepagos (montoPagado > montoTotal)
+            ticket.setEstadoFinanciero(EstadoFinanciero.PAGADO);
+        } else {
+            // 0 < montoPagado < montoTotal
+            ticket.setEstadoFinanciero(EstadoFinanciero.PAGO_PARCIAL);
         }
     }
 

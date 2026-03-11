@@ -125,23 +125,11 @@ public class PagoService {
         pago.setMotivoRechazo(motivo);
         pago = pagoRepository.save(pago);
 
-        // Revertir monto del ticket
-        Ticket ticket = pago.getTicket();
-        BigDecimal nuevoMontoPagado = ticket.getMontoPagado().subtract(pago.getMonto());
-        ticket.setMontoPagado(nuevoMontoPagado);
-        
-        // Recalcular estado financiero
-        if (nuevoMontoPagado.compareTo(BigDecimal.ZERO) <= 0) {
-            ticket.setEstadoFinanciero(EstadoFinanciero.PENDIENTE);
-        } else if (nuevoMontoPagado.compareTo(ticket.getMontoTotal()) >= 0) {
-            ticket.setEstadoFinanciero(EstadoFinanciero.PAGADO);
-        } else {
-            ticket.setEstadoFinanciero(EstadoFinanciero.PAGO_PARCIAL);
-        }
-        
-        ticketRepository.save(ticket);
+        // IMPORTANTE: Los pagos rechazados NO afectan el montoPagado del ticket
+        // porque nunca fueron sumados (solo se suman al ser APROBADOS).
+        // El pago simplemente cambia de estado y queda registrado en el historial.
 
-        log.info("Pago {} rechazado", pagoId);
+        log.info("Pago {} rechazado. montoPagado del ticket NO se modifica.", pagoId);
         return pago;
     }
 

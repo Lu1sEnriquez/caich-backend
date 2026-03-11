@@ -190,16 +190,44 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
             Pageable pageable
     );
 
+    /**
+     * Buscar tickets de un alumno con filtros
+     * Incluye solo tickets (reservas de cubículos) que creó el alumno
+     */
+    @Query("""
+        SELECT DISTINCT t FROM Ticket t 
+        LEFT JOIN t.espacios te
+        WHERE t.creadoPor.usuarioId = :alumnoId
+        AND (:estadoTicket IS NULL OR t.estadoTicket = :estadoTicket)
+        AND (
+            :fechaInicio IS NULL 
+            OR te.horaInicioReserva >= :fechaInicio
+        )
+        AND (
+            :fechaFin IS NULL 
+            OR te.horaInicioReserva <= :fechaFin
+        )
+    """)
+    Page<Ticket> findByAlumnoWithFilters(
+            @Param("alumnoId") Long alumnoId,
+            @Param("estadoTicket") EstadoTicket estadoTicket,
+            @Param("fechaInicio") LocalDateTime fechaInicio,
+            @Param("fechaFin") LocalDateTime fechaFin,
+            Pageable pageable
+    );
+
     // ========== GENERACIÓN DE FOLIOS ==========
     /**
-     * Obtener el número de secuencia más alto del mes actual para generar
-     * folios
+     * Obtener el número de secuencia más alto del año actual para generar folios.
+     * Formato de folio: YYNNNN (ej: 260001).
+     * Filtra solo folios numéricos de 6 caracteres para excluir folios antiguos TKT-*.
      */
-    @Query(value = "SELECT ISNULL(MAX(CAST(RIGHT(Folio, 4) AS INT)), 0) "
+    @Query(value = "SELECT ISNULL(MAX(CAST(SUBSTRING(Folio, 3, 4) AS INT)), 0) "
             + "FROM Tickets "
-            + "WHERE Folio LIKE 'TKT-' + FORMAT(GETDATE(), 'yyyyMM') + '-%'",
+            + "WHERE LEN(Folio) = 6 AND ISNUMERIC(Folio) = 1 "
+            + "AND LEFT(Folio, 2) = FORMAT(GETDATE(), 'yy')",
             nativeQuery = true)
-    int findMaxSequenceForCurrentMonth();
+    int findMaxSequenceForCurrentYear();
 
     // ========== CONSULTAS PARA DISPONIBILIDAD DE HORARIOS ==========
     /**

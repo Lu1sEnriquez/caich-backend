@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
+import com.api_caich.enums.Role;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -49,24 +50,16 @@ public class DataInitializer implements CommandLineRunner {
         admin.setNombreCompleto("Administrador Sistema");
         admin.setEmail("admin@caich.com");
         admin.setPasswordHash(passwordEncoder.encode("123456"));
-        admin.setRol("Administrador");
+        admin.setRol(Role.ADMINISTRADOR.getNombre());
         admin.setEstado(EstadoUsuario.ACTIVO.getValor());
         usuarioRepository.save(admin);
 
-        // Recepcionistas
-        Usuario recep1 = new Usuario();
-        recep1.setNombreCompleto("María García Recepcionista");
-        recep1.setEmail("recepcion1@caich.com");
-        recep1.setPasswordHash(passwordEncoder.encode("123456"));
-        recep1.setRol("Recepcionista");
-        recep1.setEstado(EstadoUsuario.ACTIVO.getValor());
-        usuarioRepository.save(recep1);
 
         Usuario recep2 = new Usuario();
         recep2.setNombreCompleto("Carlos López Recepcionista");
-        recep2.setEmail("recepcion2@caich.com");
+        recep2.setEmail("recepcion1@caich.com");
         recep2.setPasswordHash(passwordEncoder.encode("123456"));
-        recep2.setRol("Recepcionista");
+        recep2.setRol(Role.ADMINISTRADOR.getNombre());
         recep2.setEstado(EstadoUsuario.ACTIVO.getValor());
         usuarioRepository.save(recep2);
 
@@ -75,7 +68,7 @@ public class DataInitializer implements CommandLineRunner {
         terapeuta1.setNombreCompleto("Dr. Juan Martínez Terapeuta");
         terapeuta1.setEmail("terapeuta1@caich.com");
         terapeuta1.setPasswordHash(passwordEncoder.encode("123456"));
-        terapeuta1.setRol("Terapeuta");
+        terapeuta1.setRol(Role.TERAPEUTA.getNombre());
         terapeuta1.setEstado(EstadoUsuario.ACTIVO.getValor());
         usuarioRepository.save(terapeuta1);
 
@@ -83,7 +76,7 @@ public class DataInitializer implements CommandLineRunner {
         terapeuta2.setNombreCompleto("Dra. Ana Rodríguez Terapeuta");
         terapeuta2.setEmail("terapeuta2@caich.com");
         terapeuta2.setPasswordHash(passwordEncoder.encode("123456"));
-        terapeuta2.setRol("Terapeuta");
+        terapeuta2.setRol(Role.TERAPEUTA.getNombre());
         terapeuta2.setEstado(EstadoUsuario.ACTIVO.getValor());
         usuarioRepository.save(terapeuta2);
 
@@ -92,7 +85,7 @@ public class DataInitializer implements CommandLineRunner {
         paciente1.setNombreCompleto("Pedro Hernández Paciente");
         paciente1.setEmail("paciente1@caich.com");
         paciente1.setPasswordHash(passwordEncoder.encode("123456"));
-        paciente1.setRol("Paciente");
+        paciente1.setRol(Role.PACIENTE.getNombre());
         paciente1.setEstado(EstadoUsuario.ACTIVO.getValor());
         usuarioRepository.save(paciente1);
 
@@ -100,9 +93,25 @@ public class DataInitializer implements CommandLineRunner {
         paciente2.setNombreCompleto("Laura Sánchez Paciente");
         paciente2.setEmail("paciente2@caich.com");
         paciente2.setPasswordHash(passwordEncoder.encode("123456"));
-        paciente2.setRol("Paciente");
+        paciente2.setRol(Role.PACIENTE.getNombre());
         paciente2.setEstado(EstadoUsuario.ACTIVO.getValor());
         usuarioRepository.save(paciente2);
+
+        Usuario Alumno1 = new Usuario();
+        Alumno1.setNombreCompleto("Alumno1");
+        Alumno1.setEmail("alumno1@caich.com");
+        Alumno1.setPasswordHash(passwordEncoder.encode("123456"));
+        Alumno1.setRol(Role.ALUMNO.getNombre());
+        Alumno1.setEstado(EstadoUsuario.ACTIVO.getValor());
+        usuarioRepository.save(Alumno1);
+
+        Usuario Alumno2 = new Usuario();
+        Alumno2.setNombreCompleto("Alumno2");
+        Alumno2.setEmail("alumno2@caich.com");
+        Alumno2.setPasswordHash(passwordEncoder.encode("123456"));
+        Alumno2.setRol(Role.ALUMNO.getNombre());
+        Alumno2.setEstado(EstadoUsuario.ACTIVO.getValor());
+        usuarioRepository.save(Alumno2);
 
         System.out.println("✅ 7 usuarios de prueba creados (password: 123456)");
     }
@@ -235,17 +244,17 @@ public class DataInitializer implements CommandLineRunner {
         HorarioBase horarioGlobal = new HorarioBase();
         horarioGlobal.setEspacio(null); // Global (sin espacio asociado)
         horarioGlobal.setHoraApertura(LocalTime.parse("07:00"));
-        horarioGlobal.setHoraCierre(LocalTime.parse("18:00"));
-        horarioGlobal.setIntervaloMinutos(30);
-        horarioGlobal.setDuracionMinimaMinutos(30);
-        horarioGlobal.setDuracionMaximaMinutos(240);
+        horarioGlobal.setHoraCierre(LocalTime.parse("16:00"));
+        horarioGlobal.setIntervaloMinutos(60);
+        horarioGlobal.setDuracionMinimaMinutos(60);
+        horarioGlobal.setDuracionMaximaMinutos(120);
         horarioGlobal.setDiasOperativos("1,2,3,4,5"); // Lunes a Viernes
         horarioGlobal.setEstaActivo(true);
         horarioGlobal.setFechaCreacion(now);
         horarioGlobal.setUltimaActualizacion(now);
         horarioBaseRepository.save(horarioGlobal);
 
-        System.out.println("✅ Horario base global creado (L-V 07:00-18:00, intervalos de 30min)");
+        System.out.println("✅ Horario base global creado (L-V 07:00-16:00, intervalos de 1h)");
     }
 
 

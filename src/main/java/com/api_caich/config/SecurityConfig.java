@@ -72,7 +72,8 @@ public class SecurityConfig {
                                 "/auditoria/**",
                                 "/configuracion/**",
                                 "/health/database",
-                                "/pagos/**")
+                                "/pagos/**",
+                                "/sanciones/**")
                         .hasRole(Role.ADMINISTRADOR.getRoleValue())
 
                         // Endpoints PACIENTE
@@ -84,7 +85,8 @@ public class SecurityConfig {
 
                         // Endpoints ALUMNO personales
                         .requestMatchers(
-                                "/prestamos/mis-prestamos"
+                                "/prestamos/mis-prestamos",
+                                "/reservas/alumno/**"
                         ).hasRole(Role.ALUMNO.getRoleValue())
 
                         // Endpoints de terapeuta y creación

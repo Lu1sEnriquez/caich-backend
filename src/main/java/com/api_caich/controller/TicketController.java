@@ -203,4 +203,17 @@ public class TicketController {
 
         return ResponseEntity.ok(DataResponseDTO.success(tickets, "My tickets retrieved successfully"));
     }
+
+    @PostMapping("/{ticketId}/recalcular-totales")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA')")
+    @Operation(summary = "Recalculate ticket totals", description = "Recalculate montoTotal and estadoFinanciero based on current ticket items and payments")
+    public ResponseEntity<DataResponseDTO<TicketDTO>> recalcularTotales(
+            @Parameter(description = "Ticket ID") @PathVariable Long ticketId,
+            @AuthenticationPrincipal CustomUserDetails authentication) {
+
+        Long usuarioId = authentication.getId();
+        TicketDTO ticket = ticketService.recalcularTotalesTicket(ticketId, usuarioId);
+
+        return ResponseEntity.ok(DataResponseDTO.success(ticket, "Ticket totals recalculated successfully"));
+    }
 }
