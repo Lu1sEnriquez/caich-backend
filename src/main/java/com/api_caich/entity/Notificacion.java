@@ -27,7 +27,7 @@ public class Notificacion extends BaseEntity {
     @Column(name = "Titulo", nullable = false, length = 200)
     private String titulo;
 
-    @Column(name = "Mensaje", nullable = false, columnDefinition = "NVARCHAR(MAX)")
+    @Column(name = "Mensaje", nullable = false, columnDefinition = "TEXT")
     private String mensaje;
 
     @Column(name = "Leida", nullable = false)

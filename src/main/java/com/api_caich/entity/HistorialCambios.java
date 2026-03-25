@@ -26,13 +26,13 @@ public class HistorialCambios {
     @Column(name = "Accion", nullable = false, length = 20)
     private String accion;
 
-    @Column(name = "CamposModificados", columnDefinition = "NVARCHAR(MAX)")
+    @Column(name = "CamposModificados", columnDefinition = "TEXT")
     private String camposModificados;
 
-    @Column(name = "ValoresAnteriores", columnDefinition = "NVARCHAR(MAX)")
+    @Column(name = "ValoresAnteriores", columnDefinition = "TEXT")
     private String valoresAnteriores;
 
-    @Column(name = "ValoresNuevos", columnDefinition = "NVARCHAR(MAX)")
+    @Column(name = "ValoresNuevos", columnDefinition = "TEXT")
     private String valoresNuevos;
 
     @ManyToOne(fetch = FetchType.LAZY)
