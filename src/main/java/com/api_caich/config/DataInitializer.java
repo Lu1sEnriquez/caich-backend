@@ -11,11 +11,13 @@ import org.springframework.stereotype.Component;
 
 import com.api_caich.entity.Espacio;
 import com.api_caich.entity.HorarioBase;
+import com.api_caich.entity.MotivosSancion;
 import com.api_caich.entity.Producto;
 import com.api_caich.entity.Usuario;
 import com.api_caich.enums.EstadoUsuario;
 import com.api_caich.repository.EspacioRepository;
 import com.api_caich.repository.HorarioBaseRepository;
+import com.api_caich.repository.MotivosSancionRepository;
 import com.api_caich.repository.ProductoRepository;
 import com.api_caich.repository.UsuarioRepository;
 
@@ -30,6 +32,7 @@ public class DataInitializer implements CommandLineRunner {
     private final EspacioRepository espacioRepository;
     private final HorarioBaseRepository horarioBaseRepository;
     private final PasswordEncoder passwordEncoder;
+    private final MotivosSancionRepository motivosSancionRepository;
 
     @Override
     public void run(String... args) {
@@ -37,6 +40,7 @@ public class DataInitializer implements CommandLineRunner {
         initializeProducts();
         initializeEspacios();
         initializeHorarioBase();
+        initializeMotivosSancion();
     }
 
     private void initializeUsers() {
@@ -53,7 +57,6 @@ public class DataInitializer implements CommandLineRunner {
         admin.setRol(Role.ADMINISTRADOR.getNombre());
         admin.setEstado(EstadoUsuario.ACTIVO.getValor());
         usuarioRepository.save(admin);
-
 
         Usuario recep2 = new Usuario();
         recep2.setNombreCompleto("Carlos López Recepcionista");
@@ -257,5 +260,51 @@ public class DataInitializer implements CommandLineRunner {
         System.out.println("✅ Horario base global creado (L-V 07:00-16:00, intervalos de 1h)");
     }
 
+    private void initializeMotivosSancion() {
+        if (motivosSancionRepository.count() > 0) {
+            System.out.println("⏭️  Motivos de sanción ya inicializados");
+            return;
+        }
+
+        MotivosSancion motivos = new MotivosSancion();
+        motivos.setDescripcion("RETRASO");
+
+        MotivosSancion motivos2 = new MotivosSancion();
+        motivos2.setDescripcion("NO CANCELÓ");
+
+        MotivosSancion motivos3 = new MotivosSancion();
+        motivos3.setDescripcion("JUICIO INAPROPIADO");
+
+        MotivosSancion motivos4 = new MotivosSancion();
+        motivos4.setDescripcion("SIN FILIPINA");
+
+        MotivosSancion motivos5 = new MotivosSancion();
+        motivos5.setDescripcion("FUERA DE LABORATORIO");
+
+        MotivosSancion motivos6 = new MotivosSancion();
+        motivos6.setDescripcion("GORRA");
+
+        MotivosSancion motivos7 = new MotivosSancion();
+        motivos7.setDescripcion("TENIS");
+
+        MotivosSancion motivos8 = new MotivosSancion();
+        motivos8.setDescripcion("COMIDA");
+
+        MotivosSancion motivos9 = new MotivosSancion();
+        motivos9.setDescripcion("ROPA FRENTE");
+
+        motivosSancionRepository.save(motivos);
+        motivosSancionRepository.save(motivos2);
+        motivosSancionRepository.save(motivos3);
+        motivosSancionRepository.save(motivos4);
+        motivosSancionRepository.save(motivos5);
+        motivosSancionRepository.save(motivos6);
+        motivosSancionRepository.save(motivos7);
+        motivosSancionRepository.save(motivos8);
+        motivosSancionRepository.save(motivos9);
+
+        System.out.println("✅ 9 motivos de sanción creados");
+
+    }
 
 }
