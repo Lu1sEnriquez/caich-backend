@@ -68,6 +68,15 @@ public class SecurityConfig {
                                 Role.PACIENTE.getRoleValue()
                         )
 
+                        // Endpoints PACIENTE para pagos (ANTES del wildcard /pagos/**)
+                        .requestMatchers(HttpMethod.POST, "/pagos")
+                        .hasAnyRole(
+                                Role.ADMINISTRADOR.getRoleValue(),
+                                Role.PACIENTE.getRoleValue()
+                        )
+                        .requestMatchers("/pagos/registrar-propio")
+                        .hasRole(Role.PACIENTE.getRoleValue())
+
                         // Cuentas bancarias — solo admin
                         .requestMatchers("/cuentas-bancarias/**")
                         .hasRole(Role.ADMINISTRADOR.getRoleValue())
@@ -85,7 +94,6 @@ public class SecurityConfig {
 
                         // Endpoints PACIENTE
                         .requestMatchers(
-                                "/pagos/registrar-propio",
                                 "/tickets/mis-tickets",
                                 "/tickets/{ticketId}/comprobante"
                         ).hasRole(Role.PACIENTE.getRoleValue())

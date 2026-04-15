@@ -324,7 +324,8 @@ public class UsuarioService {
     }
 
     public Long contarNuevosPacientesUltimoMes() {
-        return usuarioRepository.countNuevosPacientesUltimoMes();
+        return usuarioRepository.countNuevosPacientesUltimoMes(
+                java.time.LocalDateTime.now().minusDays(30));
     }
 
     // Métodos de validación

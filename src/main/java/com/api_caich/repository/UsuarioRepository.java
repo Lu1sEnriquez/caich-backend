@@ -36,8 +36,12 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     @Query("SELECT u FROM Usuario u WHERE u.rol = :rol AND u.estado = 'Activo'")
     List<Usuario> findActivosByRol(@Param("rol") String rol);
 
-    @Query("SELECT COUNT(u) FROM Usuario u WHERE u.rol = 'Paciente' AND u.fechaCreacion >= DATEADD(DAY, -30, CURRENT_TIMESTAMP)")
-    Long countNuevosPacientesUltimoMes();
+    // TODO: DATEADD es exclusivo de SQL Server. Se reemplazó por aritmética de fechas JPQL compatible.
+    // Si se usa PostgreSQL: CURRENT_TIMESTAMP - INTERVAL '30 days'
+    // Si se usa SQL Server: DATEADD(DAY, -30, CURRENT_TIMESTAMP)
+    // La siguiente query JPQL es portable para ambas bases de datos.
+    @Query("SELECT COUNT(u) FROM Usuario u WHERE u.rol = 'Paciente' AND u.fechaCreacion >= :fechaLimite")
+    Long countNuevosPacientesUltimoMes(@Param("fechaLimite") java.time.LocalDateTime fechaLimite);
 
     @Query("SELECT u FROM Usuario u WHERE " +
             "LOWER(u.nombreCompleto) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
