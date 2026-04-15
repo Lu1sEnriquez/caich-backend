@@ -33,3 +33,13 @@ BEGIN
     EXEC sp_addrolemember 'db_owner', 'myuser';
 END
 GO
+
+-- 5. Crear el esquema CAICH y dejarlo como predeterminado
+IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'CAICH')
+BEGIN
+    EXEC('CREATE SCHEMA CAICH AUTHORIZATION dbo');
+END
+GO
+
+ALTER USER myuser WITH DEFAULT_SCHEMA = CAICH;
+GO

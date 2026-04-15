@@ -212,23 +212,11 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
 
     // ========== GENERACIÓN DE FOLIOS ==========
     /**
-     * Obtener el número de secuencia más alto del año actual para generar folios.
-     * Formato de folio: YYNNNN (ej: 260001).
-     * Filtra solo folios numéricos de 6 caracteres para excluir folios antiguos TKT-*.
+     * Obtiene todos los folios del año actual para calcular la siguiente secuencia
+     * en Java y evitar dependencias del motor de base de datos.
      */
-    // TODO: Query nativa incompatible entre SQL Server y PostgreSQL.
-    // SQL Server usa: ISNULL, LEN, ISNUMERIC, SUBSTRING, FORMAT(GETDATE(),'yy')
-    // PostgreSQL usa: COALESCE, LENGTH, SUBSTR, TO_CHAR(NOW(),'YY')
-    // Se proporciona versión PostgreSQL (cambiar si se usa SQL Server).
-    // Para SQL Server: SELECT ISNULL(MAX(CAST(SUBSTRING(Folio,3,4) AS INT)),0) FROM Tickets WHERE LEN(Folio)=6 AND ISNUMERIC(Folio)=1 AND LEFT(Folio,2)=FORMAT(GETDATE(),'yy')
-    // NOTA: Los nombres de tabla/columna van entre comillas dobles porque Hibernate
-    // con PhysicalNamingStrategyStandardImpl preserva el PascalCase en PostgreSQL.
-    @Query(value = "SELECT COALESCE(MAX(CAST(SUBSTR(\"Folio\", 3, 4) AS INTEGER)), 0) "
-            + "FROM \"Tickets\" "
-            + "WHERE LENGTH(\"Folio\") = 6 AND \"Folio\" ~ '^[0-9]+$' "
-            + "AND SUBSTR(\"Folio\", 1, 2) = TO_CHAR(NOW(), 'YY')",
-            nativeQuery = true)
-    int findMaxSequenceForCurrentYear();
+    @Query("SELECT t.folio FROM Ticket t WHERE t.folio LIKE CONCAT(:yearPrefix, '%')")
+    List<String> findFoliosByYearPrefix(@Param("yearPrefix") String yearPrefix);
 
     // ========== CONSULTAS PARA DISPONIBILIDAD DE HORARIOS ==========
     /**
