@@ -41,9 +41,9 @@ public class TestDataSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        // Solo ejecutar si no hay tickets (evitar duplicar datos)
-        if (ticketRepository.count() > 0) {
-            System.out.println("⏭️  Datos de prueba ya existentes, saltando seeder");
+        // Solo ejecutar si los escenarios demo ya fueron sembrados (evitar duplicados)
+        if (ticketRepository.findByFolio("TK-0001").isPresent()) {
+            System.out.println("⏭️  Escenarios demo ya existentes, saltando seeder");
             return;
         }
 
@@ -68,6 +68,7 @@ public class TestDataSeeder implements CommandLineRunner {
         var paciente5 = usuarioRepository.findByEmail("paciente5@caich.com").orElseThrow();
         var alumno3 = usuarioRepository.findByEmail("alumno3@caich.com").orElseThrow();
         var alumno4 = usuarioRepository.findByEmail("alumno4@caich.com").orElseThrow();
+        var alumno5 = usuarioRepository.findByEmail("alumno5@caich.com").orElseThrow();
         var terapeuta3 = usuarioRepository.findByEmail("terapeuta3@caich.com").orElseThrow();
 
         var espacios = espacioRepository.findAll();
@@ -84,6 +85,7 @@ public class TestDataSeeder implements CommandLineRunner {
         var vendaElastica = productos.stream().filter(p -> p.getCodigo().equals("PROD-004")).findFirst().orElseThrow();
         var tensElectro = productos.stream().filter(p -> p.getCodigo().equals("EQUIP-003")).findFirst().orElseThrow();
         var pelotaEjercicio = productos.stream().filter(p -> p.getCodigo().equals("EQUIP-004")).findFirst().orElseThrow();
+        var bandaResistencia = productos.stream().filter(p -> p.getCodigo().equals("EQUIP-005")).findFirst().orElseThrow();
 
         LocalDateTime now = LocalDateTime.now();
         int folioCounter = 1;
@@ -887,6 +889,40 @@ public class TestDataSeeder implements CommandLineRunner {
             t.getEspacios().add(te);
             ticketRepository.save(t);
         }
+        {
+            // Reserva + préstamo programado para Alumno5
+            Ticket t = new Ticket();
+            t.setFolio(String.format("TK-%04d", folioCounter++));
+            t.setCreadoPor(recep);
+            t.setEstadoTicket(EstadoTicket.AGENDADO);
+            t.setEstadoFinanciero(EstadoFinanciero.PENDIENTE);
+            t.setMontoTotal(BigDecimal.ZERO);
+            t.setMontoPagado(BigDecimal.ZERO);
+            t.setCostoAdicional(BigDecimal.ZERO);
+            ticketRepository.save(t);
+
+            TicketEspacio te = new TicketEspacio();
+            te.setTicket(t);
+            te.setEspacio(cubiculoB);
+            te.setHoraInicioReserva(now.plusDays(4).withHour(9).withMinute(0));
+            te.setHoraFinReserva(now.plusDays(4).withHour(11).withMinute(0));
+            te.setCostoCobrado(BigDecimal.ZERO);
+            te.setCelular("6446668899");
+            te.setActividad("Práctica de fortalecimiento con bandas terapéuticas");
+            te.setMaestro("Lic. Patricia Navarro");
+            t.getEspacios().add(te);
+
+            TicketPrestamo tp = new TicketPrestamo();
+            tp.setTicket(t);
+            tp.setProducto(bandaResistencia);
+            tp.setResponsable(alumno5);
+            tp.setFechaPrestamo(now.plusDays(4).withHour(9).withMinute(0));
+            tp.setFechaDevolucionEstimada(now.plusDays(4).withHour(11).withMinute(0));
+            tp.setEstado(EstadoPrestamo.ACTIVO);
+            t.getPrestamos().add(tp);
+
+            ticketRepository.save(t);
+        }
 
         // =====================================================================
         // SANCIONES
@@ -896,8 +932,9 @@ public class TestDataSeeder implements CommandLineRunner {
         // =====================================================================
         // NOTIFICACIONES
         // =====================================================================
-        seedNotificaciones(admin, recep, terapeuta1, terapeuta2, paciente1, paciente2,
-                paciente3, alumno1, alumno2, alumno3);
+        seedNotificaciones(admin, recep, terapeuta1, terapeuta2, terapeuta3,
+                paciente1, paciente2, paciente3, paciente4, paciente5,
+                alumno1, alumno2, alumno3, alumno4, alumno5);
 
         // =====================================================================
         // MOVIMIENTOS DE INVENTARIO
@@ -939,7 +976,7 @@ public class TestDataSeeder implements CommandLineRunner {
         // Terapeuta adicional
         crearUsuario("Lic. Patricia Navarro Terapeuta", "terapeuta3@caich.com", Role.TERAPEUTA, EstadoUsuario.ACTIVO, "6449001001");
 
-        System.out.println("✅ 8 usuarios adicionales creados (5 pacientes, 3 alumnos, 1 terapeuta)");
+        System.out.println("✅ 9 usuarios adicionales creados (5 pacientes, 3 alumnos y 1 terapeuta)");
     }
 
     private void crearUsuario(String nombre, String email, Role rol, EstadoUsuario estado, String telefono) {
@@ -1317,8 +1354,10 @@ public class TestDataSeeder implements CommandLineRunner {
     }
 
     private void seedNotificaciones(Usuario admin, Usuario recep, Usuario terapeuta1, Usuario terapeuta2,
-                                     Usuario paciente1, Usuario paciente2, Usuario paciente3,
-                                     Usuario alumno1, Usuario alumno2, Usuario alumno3) {
+                                     Usuario terapeuta3, Usuario paciente1, Usuario paciente2,
+                                     Usuario paciente3, Usuario paciente4, Usuario paciente5,
+                                     Usuario alumno1, Usuario alumno2, Usuario alumno3,
+                                     Usuario alumno4, Usuario alumno5) {
         LocalDateTime now = LocalDateTime.now();
 
         // Para admin - Pagos pendientes
@@ -1365,6 +1404,11 @@ public class TestDataSeeder implements CommandLineRunner {
                 "Tiene 2 citas programadas esta semana. Revise su agenda.",
                 false, null);
 
+        // Para terapeuta3
+        crearNotificacion(terapeuta3, "CITA_NUEVA", "Nueva valoración asignada",
+                "Se le asignó una valoración inicial para el próximo viernes a las 11:00 AM.",
+                false, null);
+
         // Para paciente1
         crearNotificacion(paciente1, "CITA_CONFIRMADA", "Cita confirmada",
                 "Su cita de terapia con Dr. Juan Martínez ha sido confirmada para la próxima semana.",
@@ -1392,6 +1436,16 @@ public class TestDataSeeder implements CommandLineRunner {
                 "El comprobante que envió no es legible. Por favor suba una nueva imagen del comprobante.",
                 false, null);
 
+        // Para paciente4
+        crearNotificacion(paciente4, "PAGO_PARCIAL", "Anticipo registrado correctamente",
+                "Su anticipo de $200.00 para la próxima cita quedó aplicado. Restan $200.00 por cubrir.",
+                false, null);
+
+        // Para paciente5
+        crearNotificacion(paciente5, "PAGO_PENDIENTE", "Pago en revisión",
+                "Su comprobante ya fue recibido y está siendo validado por administración.",
+                false, null);
+
         // Para alumno1
         crearNotificacion(alumno1, "PRESTAMO_RECORDATORIO", "Préstamo activo - Devolver hoy",
                 "Recuerde devolver la Camilla Portátil antes de las 4:00 PM de hoy.",
@@ -1415,7 +1469,17 @@ public class TestDataSeeder implements CommandLineRunner {
                 "El TENS Electroestimulador que tiene en préstamo debió ser devuelto hace 2 días. Acuda a recepción.",
                 false, null);
 
-        System.out.println("✅ 21 notificaciones creadas para diferentes usuarios");
+        // Para alumno4
+        crearNotificacion(alumno4, "PRESTAMO_CARGO", "Cargo por reposición generado",
+                "Se registró un cargo de $80.00 por reposición del material extraviado. Pase a caja para regularizarlo.",
+                false, null);
+
+        // Para alumno5
+        crearNotificacion(alumno5, "RESERVA_CONFIRMADA", "Reserva y material listos",
+                "Su práctica con bandas terapéuticas quedó apartada para la próxima semana en Cubículo B.",
+                false, null);
+
+        System.out.println("✅ 26 notificaciones creadas para diferentes usuarios");
     }
 
     private void crearNotificacion(Usuario usuario, String tipo, String titulo, String mensaje,
