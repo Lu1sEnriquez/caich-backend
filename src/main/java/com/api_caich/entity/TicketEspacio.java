@@ -51,4 +51,9 @@ public class TicketEspacio {
 
     @Column(name = "Maestro", length = 255)
     private String maestro;
+
+    /** Paciente al que se atiende en esta reserva (opcional, lo vincula el alumno). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "PacienteId")
+    private Usuario paciente;
 }

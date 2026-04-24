@@ -33,6 +33,7 @@ import com.api_caich.enums.EstadoPagoTransaccion;
 import com.api_caich.enums.EstadoPrestamo;
 import com.api_caich.enums.EstadoTicket;
 import com.api_caich.enums.Role;
+import com.api_caich.enums.MetodoPago;
 import com.api_caich.exception.BusinessException;
 import com.api_caich.exception.ResourceNotFoundException;
 import com.api_caich.repository.EspacioRepository;
@@ -64,6 +65,7 @@ public class TicketService {
     private final NotificacionService notificacionService;
     private final AuditoriaService auditoriaService;
     private final FolioGenerator folioGenerator;
+    private final MonederoService monederoService;
 
     /**
      * Crear ticket con Arquitectura Modular de Composición Soporta Ventas,
@@ -643,6 +645,14 @@ public class TicketService {
         }
 
         ticketRepository.save(ticket);
+
+        // Si el ticket fue pagado con monedero, crear solicitud de devolución pendiente
+        boolean fuePagadoConMonedero = ticket.getPagos() != null && ticket.getPagos().stream()
+                .anyMatch(p -> p.getMetodoPago() == MetodoPago.MONEDERO
+                            && p.getEstado() == EstadoPagoTransaccion.APROBADO);
+        if (fuePagadoConMonedero) {
+            monederoService.crearSolicitudDevolucion(ticket);
+        }
 
         // Notificar cancelación si hay cita
         if (ticket.getCita() != null && ticket.getCita().getPaciente() != null) {

@@ -4,5 +4,6 @@ public enum MetodoPago {
     EFECTIVO,
     TRANSFERENCIA,
     DEPOSITO,
-    TARJETA
+    TARJETA,
+    MONEDERO   // Pago descontado directamente del monedero virtual del alumno
 }

@@ -24,8 +24,10 @@ import com.api_caich.dto.horario.DisponibilidadDTO;
 import com.api_caich.dto.reserva.CrearReservaAlumnoDTO;
 import com.api_caich.dto.reserva.MisReservasDTO;
 import com.api_caich.dto.reserva.ReservaAlumnoResponseDTO;
+import com.api_caich.dto.usuario.UsuarioDTO;
 import com.api_caich.security.CustomUserDetails;
 import com.api_caich.service.ReservaAlumnoService;
+import com.api_caich.service.UsuarioService;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,12 +46,13 @@ import lombok.RequiredArgsConstructor;
 public class ReservaAlumnoController {
 
     private final ReservaAlumnoService reservaAlumnoService;
+    private final UsuarioService usuarioService;
     private final ObjectMapper objectMapper;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasRole('ALUMNO')")
-    @Operation(summary = "Create student reservation", 
-               description = "Create a cubicle reservation with payment proof upload")
+    @PreAuthorize("hasAnyRole('ALUMNO', 'TERAPEUTA')")
+    @Operation(summary = "Create student reservation with comprobante",
+               description = "Create a cubicle reservation uploading a payment proof (comprobante). Requires admin approval.")
     public ResponseEntity<DataResponseDTO<ReservaAlumnoResponseDTO>> crearReservaAlumno(
             @RequestParam("espacioId") Long espacioId,
             @RequestParam("fecha") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
@@ -61,6 +64,8 @@ public class ReservaAlumnoController {
             @RequestParam("maestro") String maestro,
             @RequestParam(value = "productos", required = false) String productosJson,
             @RequestParam(value = "prestamos", required = false) String prestamosJson,
+            @RequestParam(value = "pacienteId", required = false) Long pacienteId,
+            @RequestParam(value = "pacienteNuevo", required = false) String pacienteNuevoJson,
             @RequestPart("comprobante") MultipartFile comprobante,
             @AuthenticationPrincipal CustomUserDetails userDetails) throws Exception {
 
@@ -76,6 +81,12 @@ public class ReservaAlumnoController {
                     new TypeReference<List<CrearReservaAlumnoDTO.PrestamoLineaDTO>>() {});
         }
 
+        CrearReservaAlumnoDTO.PacienteNuevoDTO pacienteNuevo = null;
+        if (pacienteNuevoJson != null && !pacienteNuevoJson.isBlank()) {
+            pacienteNuevo = objectMapper.readValue(pacienteNuevoJson,
+                    CrearReservaAlumnoDTO.PacienteNuevoDTO.class);
+        }
+
         CrearReservaAlumnoDTO request = CrearReservaAlumnoDTO.builder()
                 .espacioId(espacioId)
                 .fecha(fecha)
@@ -87,6 +98,8 @@ public class ReservaAlumnoController {
                 .maestro(maestro)
                 .productos(productos)
                 .prestamos(prestamos)
+                .pacienteId(pacienteId)
+                .pacienteNuevo(pacienteNuevo)
                 .build();
 
         ReservaAlumnoResponseDTO response = reservaAlumnoService.crearReservaConPago(
@@ -95,8 +108,65 @@ public class ReservaAlumnoController {
         return ResponseEntity.ok(DataResponseDTO.success(response, "Reserva creada exitosamente"));
     }
 
+    @PostMapping(value = "/con-monedero", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ALUMNO', 'TERAPEUTA')")
+    @Operation(summary = "Create student reservation paying with wallet",
+               description = "Create a confirmed cubicle reservation by deducting saldo from the student's monedero. No admin review required for payment.")
+    public ResponseEntity<DataResponseDTO<ReservaAlumnoResponseDTO>> crearReservaConMonedero(
+            @RequestParam("espacioId") Long espacioId,
+            @RequestParam("fecha") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+            @RequestParam("horaInicio") @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime horaInicio,
+            @RequestParam("horaFin") @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime horaFin,
+            @RequestParam(value = "notas", required = false) String notas,
+            @RequestParam("celular") String celular,
+            @RequestParam("actividad") String actividad,
+            @RequestParam("maestro") String maestro,
+            @RequestParam(value = "productos", required = false) String productosJson,
+            @RequestParam(value = "prestamos", required = false) String prestamosJson,
+            @RequestParam(value = "pacienteId", required = false) Long pacienteId,
+            @RequestParam(value = "pacienteNuevo", required = false) String pacienteNuevoJson,
+            @AuthenticationPrincipal CustomUserDetails userDetails) throws Exception {
+
+        List<CrearReservaAlumnoDTO.ProductoLineaDTO> productos = Collections.emptyList();
+        if (productosJson != null && !productosJson.isBlank()) {
+            productos = objectMapper.readValue(productosJson,
+                    new TypeReference<List<CrearReservaAlumnoDTO.ProductoLineaDTO>>() {});
+        }
+        List<CrearReservaAlumnoDTO.PrestamoLineaDTO> prestamos = Collections.emptyList();
+        if (prestamosJson != null && !prestamosJson.isBlank()) {
+            prestamos = objectMapper.readValue(prestamosJson,
+                    new TypeReference<List<CrearReservaAlumnoDTO.PrestamoLineaDTO>>() {});
+        }
+
+        CrearReservaAlumnoDTO.PacienteNuevoDTO pacienteNuevo = null;
+        if (pacienteNuevoJson != null && !pacienteNuevoJson.isBlank()) {
+            pacienteNuevo = objectMapper.readValue(pacienteNuevoJson,
+                    CrearReservaAlumnoDTO.PacienteNuevoDTO.class);
+        }
+
+        CrearReservaAlumnoDTO request = CrearReservaAlumnoDTO.builder()
+                .espacioId(espacioId)
+                .fecha(fecha)
+                .horaInicio(horaInicio)
+                .horaFin(horaFin)
+                .notas(notas)
+                .celular(celular)
+                .actividad(actividad)
+                .maestro(maestro)
+                .productos(productos)
+                .prestamos(prestamos)
+                .pacienteId(pacienteId)
+                .pacienteNuevo(pacienteNuevo)
+                .build();
+
+        ReservaAlumnoResponseDTO response = reservaAlumnoService.crearReservaConMonedero(
+                request, userDetails.getId());
+
+        return ResponseEntity.ok(DataResponseDTO.success(response, "Reserva confirmada con monedero exitosamente"));
+    }
+
     @GetMapping("/mis-reservas")
-    @PreAuthorize("hasRole('ALUMNO')")
+    @PreAuthorize("hasAnyRole('ALUMNO', 'TERAPEUTA')")
     @Operation(summary = "Get my reservations", 
                description = "Get all reservations for the authenticated student")
     public ResponseEntity<DataResponseDTO<List<MisReservasDTO>>> obtenerMisReservas(
@@ -111,7 +181,7 @@ public class ReservaAlumnoController {
     }
 
     @GetMapping("/disponibilidad/{espacioId}/{fecha}")
-    @PreAuthorize("hasRole('ALUMNO')")
+    @PreAuthorize("hasAnyRole('ALUMNO', 'TERAPEUTA')")
     @Operation(summary = "Get availability", 
                description = "Get available time slots for a specific cubicle and date")
     public ResponseEntity<DataResponseDTO<DisponibilidadDTO>> obtenerDisponibilidad(
@@ -121,5 +191,16 @@ public class ReservaAlumnoController {
         DisponibilidadDTO disponibilidad = reservaAlumnoService.obtenerDisponibilidad(espacioId, fecha);
 
         return ResponseEntity.ok(DataResponseDTO.success(disponibilidad, "Disponibilidad obtenida exitosamente"));
+    }
+
+    @GetMapping("/pacientes/buscar")
+    @PreAuthorize("hasAnyRole('ALUMNO', 'TERAPEUTA')")
+    @Operation(summary = "Buscar pacientes por nombre",
+               description = "Devuelve pacientes activos cuyo nombre coincida con el término buscado. Usado para seleccionar paciente al crear reserva.")
+    public ResponseEntity<DataResponseDTO<List<UsuarioDTO>>> buscarPacientes(
+            @Parameter(description = "Término de búsqueda parcial") @RequestParam String nombre) {
+
+        List<UsuarioDTO> pacientes = usuarioService.buscarPacientesPorNombre(nombre);
+        return ResponseEntity.ok(DataResponseDTO.success(pacientes, "Pacientes encontrados"));
     }
 }

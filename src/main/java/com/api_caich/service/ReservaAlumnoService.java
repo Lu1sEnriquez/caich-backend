@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -30,6 +29,7 @@ import com.api_caich.enums.EstadoPagoTransaccion;
 import com.api_caich.enums.EstadoPrestamo;
 import com.api_caich.enums.EstadoSancion;
 import com.api_caich.enums.EstadoTicket;
+import com.api_caich.enums.EstadoUsuario;
 import com.api_caich.enums.MetodoPago;
 import com.api_caich.enums.Role;
 import com.api_caich.enums.TipoSancion;
@@ -44,8 +44,14 @@ import com.api_caich.repository.TicketRepository;
 import com.api_caich.repository.UsuarioRepository;
 import com.api_caich.util.FolioGenerator;
 
+import org.springframework.stereotype.Service;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import com.api_caich.service.MonederoService;
+
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Service
 @RequiredArgsConstructor
@@ -64,6 +70,8 @@ public class ReservaAlumnoService {
     private final NotificacionService notificacionService;
     private final InventarioService inventarioService;
     private final FolioGenerator folioGenerator;
+    private final MonederoService monederoService;
+    private final PasswordEncoder passwordEncoder;
     /**
      * Crea una reserva de cubículo para un alumno con su comprobante de pago
      */
@@ -151,6 +159,10 @@ public class ReservaAlumnoService {
 
         ticketEspacioRepository.save(ticketEspacio);
         ticket.getEspacios().add(ticketEspacio);
+
+        // 8a. Vincular paciente a la reserva (seleccionado o nuevo con deduplicación)
+        resolverPacienteParaEspacio(ticketEspacio, request.getPacienteId(), request.getPacienteNuevo());
+        ticketEspacioRepository.save(ticketEspacio);
 
         // 8b. Procesar VENTAS (Productos compra alumno)
         if (request.getProductos() != null && !request.getProductos().isEmpty()) {
@@ -302,5 +314,220 @@ public class ReservaAlumnoService {
 
         // Delegar al servicio de disponibilidad
         return disponibilidadService.obtenerSlotsDisponibles(espacioId, fecha);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // NUEVO FLUJO: RESERVA CON MONEDERO
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Crea una reserva de cubículo y descuenta el monto directamente del monedero
+     * del alumno. Si el saldo es suficiente, la reserva queda AGENDADA y el pago
+     * queda APROBADO de forma inmediata (sin revisión manual del admin).
+     */
+    @Transactional
+    public ReservaAlumnoResponseDTO crearReservaConMonedero(
+            CrearReservaAlumnoDTO request,
+            Long alumnoId) {
+
+        log.info("Creando reserva con monedero para alumno ID: {}", alumnoId);
+
+        // 1. Validar usuario
+        Usuario alumno = usuarioRepository.findById(alumnoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado"));
+
+        if (!alumno.getRol().equalsIgnoreCase(Role.ALUMNO.getNombre())) {
+            throw new BusinessException("El usuario no es un alumno");
+        }
+
+        // 2. Verificar sanciones activas
+        List<Sancion> sancionesActivas = sancionRepository.findSancionesActivasParaAlumno(
+                alumnoId, EstadoSancion.ACTIVA, LocalDate.now());
+
+        boolean tieneSuspension = sancionesActivas.stream()
+                .anyMatch(s -> s.getTipoSancion() == TipoSancion.SUSPENSION ||
+                              s.getTipoSancion() == TipoSancion.SUSPENSION_PERMANENTE);
+
+        if (tieneSuspension) {
+            throw new BusinessException("No puede realizar reservas debido a una sanción activa");
+        }
+
+        // 3. Validar espacio
+        Espacio espacio = espacioRepository.findById(request.getEspacioId())
+                .orElseThrow(() -> new ResourceNotFoundException("Espacio no encontrado"));
+
+        // 4. Validar disponibilidad
+        LocalDateTime horaInicio = LocalDateTime.of(request.getFecha(), request.getHoraInicio());
+        LocalDateTime horaFin    = LocalDateTime.of(request.getFecha(), request.getHoraFin());
+
+        if (!disponibilidadService.estaDisponible(request.getEspacioId(), horaInicio, horaFin)) {
+            throw new BusinessException("El horario seleccionado no está disponible");
+        }
+
+        // 5. Calcular costo
+        long horas = java.time.temporal.ChronoUnit.HOURS.between(horaInicio, horaFin);
+        if (horas <= 0) {
+            throw new BusinessException("La hora de fin debe ser posterior a la hora de inicio");
+        }
+        BigDecimal costo = espacio.getCostoPorHora().multiply(BigDecimal.valueOf(horas));
+
+        // 6. Verificar saldo suficiente ANTES de crear el ticket
+        //    (el descuento atómico real lo hace MonederoService.descontarSaldo)
+        com.api_caich.entity.Monedero monedero = monederoService.obtenerOCrearMonedero(alumnoId);
+        if (monedero.getSaldo().compareTo(costo) < 0) {
+            throw new BusinessException(
+                    "Saldo insuficiente en monedero. Disponible: $" + monedero.getSaldo() +
+                    " | Requerido: $" + costo +
+                    ". Recargue su monedero para continuar.");
+        }
+
+        // 7. Crear Ticket
+        String folio = folioGenerator.generarFolioTicket();
+        Ticket ticket = new Ticket();
+        ticket.setFolio(folio);
+        ticket.setCreadoPor(alumno);
+        ticket.setEstadoTicket(EstadoTicket.AGENDADO);
+        ticket.setEstadoFinanciero(EstadoFinanciero.PENDIENTE);
+        ticket.setCostoAdicional(BigDecimal.ZERO);
+        ticket.setMontoPagado(BigDecimal.ZERO);
+        ticket.setVentas(new ArrayList<>());
+        ticket.setEspacios(new ArrayList<>());
+        ticket.setPrestamos(new ArrayList<>());
+        ticket.setPagos(new ArrayList<>());
+        ticket = ticketRepository.save(ticket);
+
+        // 8. TicketEspacio
+        TicketEspacio ticketEspacio = new TicketEspacio();
+        ticketEspacio.setTicket(ticket);
+        ticketEspacio.setEspacio(espacio);
+        ticketEspacio.setHoraInicioReserva(horaInicio);
+        ticketEspacio.setHoraFinReserva(horaFin);
+        ticketEspacio.setCostoCobrado(costo);
+        ticketEspacio.setCelular(request.getCelular());
+        ticketEspacio.setActividad(request.getActividad());
+        ticketEspacio.setMaestro(request.getMaestro());
+        ticketEspacioRepository.save(ticketEspacio);
+        ticket.getEspacios().add(ticketEspacio);
+
+        // 8a. Vincular paciente a la reserva (seleccionado o nuevo con deduplicación)
+        resolverPacienteParaEspacio(ticketEspacio, request.getPacienteId(), request.getPacienteNuevo());
+        ticketEspacioRepository.save(ticketEspacio);
+
+        // 8b. Ventas
+        if (request.getProductos() != null && !request.getProductos().isEmpty()) {
+            for (CrearReservaAlumnoDTO.ProductoLineaDTO lineaDTO : request.getProductos()) {
+                Producto producto = productoRepository.findById(lineaDTO.getProductoId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado: " + lineaDTO.getProductoId()));
+                if (!Boolean.TRUE.equals(producto.getEsVendible())) {
+                    throw new BusinessException("El producto no está disponible para venta: " + producto.getNombre());
+                }
+                if (producto.getStock() < lineaDTO.getCantidad()) {
+                    throw new BusinessException("Stock insuficiente para: " + producto.getNombre());
+                }
+                TicketVenta venta = new TicketVenta();
+                venta.setTicket(ticket);
+                venta.setProducto(producto);
+                venta.setCantidad(lineaDTO.getCantidad());
+                venta.setPrecioUnitario(producto.getPrecio());
+                venta.setSubtotal(producto.getPrecio().multiply(BigDecimal.valueOf(lineaDTO.getCantidad())));
+                ticket.getVentas().add(venta);
+                inventarioService.reducirStock(producto.getProductoId(), lineaDTO.getCantidad(),
+                        "Compra alumno en reserva con monedero: " + folio, "RESERVA_MONEDERO_" + folio, alumnoId);
+            }
+        }
+
+        // 8c. Préstamos
+        if (request.getPrestamos() != null && !request.getPrestamos().isEmpty()) {
+            for (CrearReservaAlumnoDTO.PrestamoLineaDTO lineaDTO : request.getPrestamos()) {
+                Producto producto = productoRepository.findById(lineaDTO.getProductoId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado: " + lineaDTO.getProductoId()));
+                if (!Boolean.TRUE.equals(producto.getEsPrestable())) {
+                    throw new BusinessException("El producto no es prestable: " + producto.getNombre());
+                }
+                TicketPrestamo prestamo = new TicketPrestamo();
+                prestamo.setTicket(ticket);
+                prestamo.setProducto(producto);
+                prestamo.setResponsable(alumno);
+                prestamo.setFechaPrestamo(horaInicio);
+                prestamo.setFechaDevolucionEstimada(horaFin);
+                prestamo.setEstado(EstadoPrestamo.ACTIVO);
+                prestamo.setCostoUnitario(producto.getPrecio());
+                ticket.getPrestamos().add(prestamo);
+            }
+        }
+
+        // 9. Recalcular total
+        ticket.recalcularTotal();
+        ticketRepository.save(ticket);
+
+        // 10. Descontar del monedero (operación atómica con optimistic lock)
+        //     Esto también crea el registro de Pago con estado APROBADO
+        com.api_caich.entity.Pago pago = monederoService.descontarSaldo(alumnoId, ticket, ticket.getMontoTotal());
+        ticket.getPagos().add(pago);
+
+        // 11. Marcar ticket como PAGADO
+        ticket.setMontoPagado(ticket.getMontoTotal());
+        ticket.setEstadoFinanciero(EstadoFinanciero.PAGADO);
+        ticketRepository.save(ticket);
+
+        // 12. Notificación
+        notificacionService.notificarReservaAlumnoCreada(
+                alumnoId, ticket.getTicketId(), folio, espacio.getNombre());
+
+        log.info("Reserva con monedero confirmada: Ticket {}, Espacio {}", folio, espacio.getNombre());
+
+        return ReservaAlumnoResponseDTO.builder()
+                .ticketId(ticket.getTicketId())
+                .folio(folio)
+                .estado(ticket.getEstadoTicket().name())
+                .mensaje("Reserva confirmada. El pago fue procesado desde tu monedero.")
+                .build();
+    }
+
+    // =========================================================================
+    // MÉTODO AUXILIAR: PACIENTE
+    // =========================================================================
+
+    /**
+     * Vincula un paciente al espacio de un ticket.
+     * Prioridad: pacienteId existente → buscar por nombre → crear nuevo.
+     * La deduplicación es por nombre completo (sin distinción de mayúsculas).
+     */
+    private void resolverPacienteParaEspacio(
+            TicketEspacio ticketEspacio,
+            Long pacienteId,
+            CrearReservaAlumnoDTO.PacienteNuevoDTO pacienteNuevo) {
+
+        if (pacienteId != null) {
+            Usuario paciente = usuarioRepository.findById(pacienteId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Paciente no encontrado: " + pacienteId));
+            ticketEspacio.setPaciente(paciente);
+            return;
+        }
+
+        if (pacienteNuevo != null
+                && pacienteNuevo.getNombreCompleto() != null
+                && !pacienteNuevo.getNombreCompleto().isBlank()) {
+
+            // Buscar primero por nombre exacto (deduplicación)
+            Usuario paciente = usuarioRepository
+                    .findByNombreCompletoIgnoreCaseAndRol(
+                            pacienteNuevo.getNombreCompleto().trim(),
+                            Role.PACIENTE.getNombre())
+                    .orElseGet(() -> {
+                        // No existe → crear nuevo paciente
+                        Usuario nuevo = new Usuario();
+                        nuevo.setNombreCompleto(pacienteNuevo.getNombreCompleto().trim());
+                        nuevo.setTelefono(pacienteNuevo.getTelefono());
+                        nuevo.setRol(Role.PACIENTE.getNombre());
+                        nuevo.setEstado(EstadoUsuario.ACTIVO.getValor());
+                        // Contraseña temporal no funcional (el paciente no inicia sesión directamente)
+                        nuevo.setPasswordHash(passwordEncoder.encode(
+                                java.util.UUID.randomUUID().toString()));
+                        return usuarioRepository.save(nuevo);
+                    });
+
+            ticketEspacio.setPaciente(paciente);
+        }
     }
 }

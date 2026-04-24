@@ -36,7 +36,13 @@ public class TestDataSeeder implements CommandLineRunner {
     private final ExcepcionHorarioRepository excepcionHorarioRepository;
     private final CuentaBancariaRepository cuentaBancariaRepository;
     private final MovimientoInventarioRepository movimientoInventarioRepository;
+    private final MonederoRepository monederoRepository;
+    private final RecargaMonederoRepository recargaMonederoRepository;
+    private final MovimientoMonederoRepository movimientoMonederoRepository;
+    private final SolicitudDevolucionMonederoRepository solicitudDevolucionMonederoRepository;
     private final PasswordEncoder passwordEncoder;
+
+    private int folioCounter = 1;
 
     @Override
     @Transactional
@@ -88,7 +94,6 @@ public class TestDataSeeder implements CommandLineRunner {
         var bandaResistencia = productos.stream().filter(p -> p.getCodigo().equals("EQUIP-005")).findFirst().orElseThrow();
 
         LocalDateTime now = LocalDateTime.now();
-        int folioCounter = 1;
 
         // =====================================================================
         // CASO 1: Cita completada y pagada con efectivo (hace 2 semanas)
@@ -942,6 +947,11 @@ public class TestDataSeeder implements CommandLineRunner {
         seedMovimientosInventario(admin, recep, aceiteLavanda, cremaArnica, gelFrio, vendaElastica,
                 camillaPortatil, kitUltrasonido);
 
+        // =====================================================================
+        // MONEDEROS VIRTUALES
+        // =====================================================================
+        seedMonederos(admin, alumno1, alumno2, terapeuta1);
+
         System.out.println("✅ Seeder completado: " + (folioCounter - 1) + " tickets creados con sus relaciones");
         System.out.println("   - Citas (completadas, agendadas, en progreso, canceladas, borradores)");
         System.out.println("   - Ventas de productos (pagadas, rechazadas, múltiples)");
@@ -1540,5 +1550,225 @@ public class TestDataSeeder implements CommandLineRunner {
         mov.setRealizadoPor(realizadoPor);
         mov.setFechaMovimiento(fecha);
         movimientoInventarioRepository.save(mov);
+    }
+
+    // =========================================================================
+    // SEED: MONEDEROS VIRTUALES
+    // =========================================================================
+
+    /**
+     * Crea datos de ejemplo para el sistema de monedero virtual:
+     * - Alumno1: recarga rechazada (intento 1) + recarga aprobada (intento 2)
+     *   + consumo por reserva + recarga pendiente + saldo $850
+     * - Alumno2: recarga pendiente, saldo $0
+     * - Terapeuta1: recarga aprobada, saldo $500
+     * - Solicitud de devolución PENDIENTE para alumno1 (ticket cancelado)
+     */
+    private void seedMonederos(Usuario admin, Usuario alumno1, Usuario alumno2, Usuario terapeuta1) {
+        LocalDateTime now = LocalDateTime.now();
+
+        // ── ALUMNO 1 ──────────────────────────────────────────────────────────
+
+        // Monedero de alumno1
+        Monedero monederoAlumno1 = new Monedero();
+        monederoAlumno1.setAlumno(alumno1);
+        monederoAlumno1.setSaldo(new BigDecimal("850.00"));
+        monederoAlumno1 = monederoRepository.save(monederoAlumno1);
+
+        // Recarga #1 de alumno1 – RECHAZADA (comprobante ilegible, intento 1)
+        RecargaMonedero recarga1 = new RecargaMonedero();
+        recarga1.setAlumno(alumno1);
+        recarga1.setMonto(new BigDecimal("1000.00"));
+        recarga1.setComprobanteUrl("uploads/comprobantes/alumno1_recarga_intento1.jpg");
+        recarga1.setReferenciaBancaria("REF-20240101");
+        recarga1.setNotasAlumno("Transferencia BBVA, concepto: recarga monedero CAICH");
+        recarga1.setEstado(EstadoRecargaMonedero.RECHAZADO);
+        recarga1.setMotivoRechazo("El comprobante adjunto es ilegible. Por favor sube una imagen más clara.");
+        recarga1.setVerificadoPor(admin);
+        recarga1.setFechaSolicitud(now.minusDays(10));
+        recarga1.setFechaVerificacion(now.minusDays(9));
+        recarga1.setNumeroIntento(1);
+        recarga1 = recargaMonederoRepository.save(recarga1);
+
+        // Recarga #2 de alumno1 – APROBADA (reintento exitoso, intento 2)
+        RecargaMonedero recarga2 = new RecargaMonedero();
+        recarga2.setAlumno(alumno1);
+        recarga2.setMonto(new BigDecimal("1000.00"));
+        recarga2.setComprobanteUrl("uploads/comprobantes/alumno1_recarga_intento2.jpg");
+        recarga2.setReferenciaBancaria("REF-20240102");
+        recarga2.setNotasAlumno("Reintento con imagen corregida. Transferencia BBVA $1,000.");
+        recarga2.setEstado(EstadoRecargaMonedero.APROBADO);
+        recarga2.setVerificadoPor(admin);
+        recarga2.setFechaSolicitud(now.minusDays(8));
+        recarga2.setFechaVerificacion(now.minusDays(7));
+        recarga2.setNumeroIntento(2);
+        recarga2 = recargaMonederoRepository.save(recarga2);
+
+        // Movimiento: RECARGA +$1000 aprobada para alumno1
+        MovimientoMonedero movRecargaAlumno1 = new MovimientoMonedero();
+        movRecargaAlumno1.setMonedero(monederoAlumno1);
+        movRecargaAlumno1.setTipo(TipoMovimientoMonedero.RECARGA);
+        movRecargaAlumno1.setMonto(new BigDecimal("1000.00"));
+        movRecargaAlumno1.setSaldoAnterior(BigDecimal.ZERO);
+        movRecargaAlumno1.setSaldoNuevo(new BigDecimal("1000.00"));
+        movRecargaAlumno1.setDescripcion("Recarga aprobada por administrador (intento 2)");
+        movRecargaAlumno1.setRecargaMonedero(recarga2);
+        movRecargaAlumno1.setFechaMovimiento(now.minusDays(7));
+        movimientoMonederoRepository.save(movRecargaAlumno1);
+
+        // Ticket de reserva cubículo pagado con monedero (COMPLETADO) — alumno1
+        Ticket ticketReservaMonedero = new Ticket();
+        ticketReservaMonedero.setFolio(String.format("TK-%04d", folioCounter++));
+        ticketReservaMonedero.setCreadoPor(alumno1);
+        ticketReservaMonedero.setEstadoTicket(EstadoTicket.COMPLETADO);
+        ticketReservaMonedero.setEstadoFinanciero(EstadoFinanciero.PAGADO);
+        ticketReservaMonedero.setMontoTotal(new BigDecimal("150.00"));
+        ticketReservaMonedero.setMontoPagado(new BigDecimal("150.00"));
+        ticketReservaMonedero.setCostoAdicional(BigDecimal.ZERO);
+        ticketRepository.save(ticketReservaMonedero);
+
+        var espacios = espacioRepository.findAll();
+        var cubiculoA = espacios.stream().filter(e -> e.getNombre().equals("Cubículo A")).findFirst().orElseThrow();
+
+        TicketEspacio teMonedero = new TicketEspacio();
+        teMonedero.setTicket(ticketReservaMonedero);
+        teMonedero.setEspacio(cubiculoA);
+        teMonedero.setHoraInicioReserva(now.minusDays(5).withHour(10).withMinute(0));
+        teMonedero.setHoraFinReserva(now.minusDays(5).withHour(12).withMinute(0));
+        teMonedero.setCostoCobrado(new BigDecimal("150.00"));
+        teMonedero.setCelular("6444000001");
+        teMonedero.setActividad("Práctica de técnicas manuales – alumno");
+        teMonedero.setMaestro("Lic. María Luisa Valenzuela");
+        ticketReservaMonedero.getEspacios().add(teMonedero);
+        ticketRepository.save(ticketReservaMonedero);
+
+        Pago pagoMonedero = new Pago();
+        pagoMonedero.setTicket(ticketReservaMonedero);
+        pagoMonedero.setMonto(new BigDecimal("150.00"));
+        pagoMonedero.setMetodoPago(MetodoPago.MONEDERO);
+        pagoMonedero.setEstado(EstadoPagoTransaccion.APROBADO);
+        pagoMonedero.setFechaPago(now.minusDays(5));
+        pagoMonedero.setVerificadoPor(admin);
+        pagoRepository.save(pagoMonedero);
+
+        // Movimiento: CONSUMO -$150 por reserva
+        MovimientoMonedero movConsumo = new MovimientoMonedero();
+        movConsumo.setMonedero(monederoAlumno1);
+        movConsumo.setTipo(TipoMovimientoMonedero.CONSUMO);
+        movConsumo.setMonto(new BigDecimal("150.00"));
+        movConsumo.setSaldoAnterior(new BigDecimal("1000.00"));
+        movConsumo.setSaldoNuevo(new BigDecimal("850.00"));
+        movConsumo.setDescripcion("Reserva cubículo A – 2 horas (" + ticketReservaMonedero.getFolio() + ")");
+        movConsumo.setTicket(ticketReservaMonedero);
+        movConsumo.setFechaMovimiento(now.minusDays(5));
+        movimientoMonederoRepository.save(movConsumo);
+
+        // Ticket cancelado → solicitud de devolución PENDIENTE
+        Ticket ticketCancelado = new Ticket();
+        ticketCancelado.setFolio(String.format("TK-%04d", folioCounter++));
+        ticketCancelado.setCreadoPor(alumno1);
+        ticketCancelado.setEstadoTicket(EstadoTicket.CANCELADO);
+        ticketCancelado.setEstadoFinanciero(EstadoFinanciero.PENDIENTE);
+        ticketCancelado.setMontoTotal(new BigDecimal("100.00"));
+        ticketCancelado.setMontoPagado(new BigDecimal("100.00"));
+        ticketCancelado.setCostoAdicional(BigDecimal.ZERO);
+        ticketRepository.save(ticketCancelado);
+
+        TicketEspacio teCancelado = new TicketEspacio();
+        teCancelado.setTicket(ticketCancelado);
+        teCancelado.setEspacio(cubiculoA);
+        teCancelado.setHoraInicioReserva(now.minusDays(3).withHour(14).withMinute(0));
+        teCancelado.setHoraFinReserva(now.minusDays(3).withHour(15).withMinute(30));
+        teCancelado.setCostoCobrado(new BigDecimal("100.00"));
+        teCancelado.setCelular("6444000001");
+        teCancelado.setActividad("Práctica individual");
+        teCancelado.setMaestro("Lic. María Luisa Valenzuela");
+        ticketCancelado.getEspacios().add(teCancelado);
+        ticketRepository.save(ticketCancelado);
+
+        Pago pagoMonederoCancelado = new Pago();
+        pagoMonederoCancelado.setTicket(ticketCancelado);
+        pagoMonederoCancelado.setMonto(new BigDecimal("100.00"));
+        pagoMonederoCancelado.setMetodoPago(MetodoPago.MONEDERO);
+        pagoMonederoCancelado.setEstado(EstadoPagoTransaccion.APROBADO);
+        pagoMonederoCancelado.setFechaPago(now.minusDays(4));
+        pagoMonederoCancelado.setVerificadoPor(admin);
+        pagoRepository.save(pagoMonederoCancelado);
+
+        SolicitudDevolucionMonedero solicitud = new SolicitudDevolucionMonedero();
+        solicitud.setTicket(ticketCancelado);
+        solicitud.setMonedero(monederoAlumno1);
+        solicitud.setMontoDevolucion(new BigDecimal("100.00"));
+        solicitud.setEstado(EstadoDevolucionMonedero.PENDIENTE);
+        solicitud.setFechaSolicitud(now.minusDays(3));
+        solicitudDevolucionMonederoRepository.save(solicitud);
+
+        // Recarga #3 de alumno1 – PENDIENTE_REVISION
+        RecargaMonedero recarga3 = new RecargaMonedero();
+        recarga3.setAlumno(alumno1);
+        recarga3.setMonto(new BigDecimal("200.00"));
+        recarga3.setComprobanteUrl("uploads/comprobantes/alumno1_recarga_pendiente.jpg");
+        recarga3.setReferenciaBancaria("REF-20240115");
+        recarga3.setNotasAlumno("Recarga para próximas reservas. Transferencia BBVA.");
+        recarga3.setEstado(EstadoRecargaMonedero.PENDIENTE_REVISION);
+        recarga3.setFechaSolicitud(now.minusDays(1));
+        recarga3.setNumeroIntento(1);
+        recargaMonederoRepository.save(recarga3);
+
+        // ── ALUMNO 2 ──────────────────────────────────────────────────────────
+
+        Monedero monederoAlumno2 = new Monedero();
+        monederoAlumno2.setAlumno(alumno2);
+        monederoAlumno2.setSaldo(BigDecimal.ZERO);
+        monederoAlumno2 = monederoRepository.save(monederoAlumno2);
+
+        // Recarga pendiente de alumno2
+        RecargaMonedero recargaAlumno2 = new RecargaMonedero();
+        recargaAlumno2.setAlumno(alumno2);
+        recargaAlumno2.setMonto(new BigDecimal("300.00"));
+        recargaAlumno2.setComprobanteUrl("uploads/comprobantes/alumno2_recarga_pendiente.jpg");
+        recargaAlumno2.setReferenciaBancaria("REF-20240116");
+        recargaAlumno2.setNotasAlumno("Primera recarga al monedero. Depósito Banorte.");
+        recargaAlumno2.setEstado(EstadoRecargaMonedero.PENDIENTE_REVISION);
+        recargaAlumno2.setFechaSolicitud(now.minusHours(3));
+        recargaAlumno2.setNumeroIntento(1);
+        recargaMonederoRepository.save(recargaAlumno2);
+
+        // ── TERAPEUTA 1 ───────────────────────────────────────────────────────
+
+        Monedero monederoTerapeuta1 = new Monedero();
+        monederoTerapeuta1.setAlumno(terapeuta1);
+        monederoTerapeuta1.setSaldo(new BigDecimal("500.00"));
+        monederoTerapeuta1 = monederoRepository.save(monederoTerapeuta1);
+
+        RecargaMonedero recargaTer1 = new RecargaMonedero();
+        recargaTer1.setAlumno(terapeuta1);
+        recargaTer1.setMonto(new BigDecimal("500.00"));
+        recargaTer1.setComprobanteUrl("uploads/comprobantes/terapeuta1_recarga.jpg");
+        recargaTer1.setReferenciaBancaria("REF-20240110");
+        recargaTer1.setNotasAlumno("Recarga inicial. Transferencia Santander.");
+        recargaTer1.setEstado(EstadoRecargaMonedero.APROBADO);
+        recargaTer1.setVerificadoPor(admin);
+        recargaTer1.setFechaSolicitud(now.minusDays(6));
+        recargaTer1.setFechaVerificacion(now.minusDays(6).plusHours(2));
+        recargaTer1.setNumeroIntento(1);
+        recargaTer1 = recargaMonederoRepository.save(recargaTer1);
+
+        MovimientoMonedero movRecargaTer1 = new MovimientoMonedero();
+        movRecargaTer1.setMonedero(monederoTerapeuta1);
+        movRecargaTer1.setTipo(TipoMovimientoMonedero.RECARGA);
+        movRecargaTer1.setMonto(new BigDecimal("500.00"));
+        movRecargaTer1.setSaldoAnterior(BigDecimal.ZERO);
+        movRecargaTer1.setSaldoNuevo(new BigDecimal("500.00"));
+        movRecargaTer1.setDescripcion("Recarga aprobada por administrador");
+        movRecargaTer1.setRecargaMonedero(recargaTer1);
+        movRecargaTer1.setFechaMovimiento(now.minusDays(6).plusHours(2));
+        movimientoMonederoRepository.save(movRecargaTer1);
+
+        System.out.println("✅ Monederos virtuales creados:");
+        System.out.println("   - alumno1@caich.com: saldo $850 (recarga rechazada + aprobada + consumo, recarga pendiente)");
+        System.out.println("   - alumno2@caich.com: saldo $0 (recarga pendiente de revisión)");
+        System.out.println("   - terapeuta1@caich.com: saldo $500 (recarga aprobada)");
+        System.out.println("   - 1 solicitud de devolución PENDIENTE para alumno1 ($100)");
     }
 }

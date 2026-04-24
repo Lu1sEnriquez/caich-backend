@@ -43,6 +43,26 @@ public class CrearReservaAlumnoDTO {
     private List<ProductoLineaDTO> productos;
     private List<PrestamoLineaDTO> prestamos;
 
+    /**
+     * ID de un paciente ya existente en el sistema.
+     * Si se provee, tiene prioridad sobre {@code pacienteNuevo}.
+     */
+    private Long pacienteId;
+
+    /**
+     * Datos para crear (o encontrar por nombre) al paciente.
+     * Solo se usa cuando {@code pacienteId} es nulo.
+     */
+    private PacienteNuevoDTO pacienteNuevo;
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PacienteNuevoDTO {
+        private String nombreCompleto;
+        private String telefono;
+    }
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

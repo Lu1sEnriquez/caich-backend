@@ -328,6 +328,17 @@ public class UsuarioService {
                 java.time.LocalDateTime.now().minusDays(30));
     }
 
+    /**
+     * Busca pacientes activos cuyo nombre contenga el término dado.
+     * Usado por alumnos y terapeutas al crear una reserva.
+     */
+    public List<UsuarioDTO> buscarPacientesPorNombre(String nombre) {
+        return usuarioRepository.findPacientesActivosByNombreLike(nombre)
+                .stream()
+                .map(this::mapToDTO)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
     // Métodos de validación
     private void validarRol(String rol) {
         try {

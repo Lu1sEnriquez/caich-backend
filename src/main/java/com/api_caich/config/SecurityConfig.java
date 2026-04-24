@@ -61,6 +61,10 @@ public class SecurityConfig {
                         )
                         .permitAll()
 
+                        // Acceso a comprobantes de recargas — solo alumno dueño o admin
+                        // (se controla por @PreAuthorize en FileController si existe,
+                        //  o la ruta /uploads/** ya es pública para simplificar en desarrollo)
+
                         // Comprobantes de pago (permitir acceso autenticado por rol)
                         .requestMatchers("/pagos/comprobantes/**", "/pagos/subir-comprobante", "/pagos/ticket/**")
                         .hasAnyRole(
@@ -83,14 +87,19 @@ public class SecurityConfig {
 
                         // Endpoints de administración
                         .requestMatchers(
-                                "/usuarios/**",
                                 "/reportes/**",
                                 "/auditoria/**",
                                 "/configuracion/**",
                                 "/health/database",
                                 "/pagos/**",
-                                "/sanciones/**")
+                                "/sanciones/**",
+                                "/admin/monedero/**")
                         .hasRole(Role.ADMINISTRADOR.getRoleValue())
+
+                        // Endpoints ALUMNO y TERAPEUTA — monedero propio
+                        .requestMatchers(
+                                "/monedero/**"
+                        ).hasAnyRole(Role.ALUMNO.getRoleValue(), Role.TERAPEUTA.getRoleValue())
 
                         // Endpoints PACIENTE
                         .requestMatchers(
