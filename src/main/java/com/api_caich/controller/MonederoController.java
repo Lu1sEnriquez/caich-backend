@@ -1,3 +1,4 @@
+
 package com.api_caich.controller;
 
 import java.time.LocalDate;
@@ -105,5 +106,54 @@ public class MonederoController {
             @AuthenticationPrincipal CustomUserDetails user) {
         List<RecargaMonederoDTO> lista = monederoService.obtenerMisRecargas(user.getId());
         return ResponseEntity.ok(DataResponseDTO.success(lista, "Recargas obtenidas"));
+    }
+
+    // ─── RECARGA POR TESORERÍA ─────────────────────────────────────────────
+
+    @PostMapping("/recargas/tesoreria")
+    @PreAuthorize("hasRole('ALUMNO')")
+    @Operation(summary = "Solicitar recarga por tesorería (genera folio y ticket)")
+    public ResponseEntity<DataResponseDTO<RecargaMonederoDTO>> solicitarRecargaTesoreria(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @RequestPart("datos") @Validated CrearRecargaMonederoRequest request) {
+        RecargaMonederoDTO dto = monederoService.solicitarRecargaTesoreria(user.getId(), request);
+        return ResponseEntity
+                .ok(DataResponseDTO.success(dto, "Recarga por tesorería generada. Lleve el ticket a ventanilla."));
+    }
+
+    @GetMapping("/recargas/tesoreria/pendientes")
+    @PreAuthorize("hasRole('TESORERIA')")
+    @Operation(summary = "Listar recargas por tesorería pendientes de confirmación")
+    public ResponseEntity<DataResponseDTO<List<RecargaMonederoDTO>>> listarRecargasTesoreriaPendientes() {
+        List<RecargaMonederoDTO> lista = monederoService.listarRecargasTesoreriaPendientes();
+        return ResponseEntity.ok(DataResponseDTO.success(lista, "Recargas pendientes en ventanilla"));
+    }
+
+    @GetMapping("/recargas/tesoreria/confirmadas")
+    @PreAuthorize("hasRole('TESORERIA')")
+    @Operation(summary = "Listar recargas por tesorería ya confirmadas")
+    public ResponseEntity<DataResponseDTO<List<RecargaMonederoDTO>>> listarRecargasTesoreriaConfirmadas() {
+        List<RecargaMonederoDTO> lista = monederoService.listarRecargasTesoreriaConfirmadas();
+        return ResponseEntity.ok(DataResponseDTO.success(lista, "Recargas confirmadas en ventanilla"));
+    }
+
+    @PostMapping("/recargas/tesoreria/{recargaId}/confirmar")
+    @PreAuthorize("hasRole('TESORERIA')")
+    @Operation(summary = "Confirmar pago de recarga por tesorería (solo cambia estado, no acredita saldo)")
+    public ResponseEntity<DataResponseDTO<RecargaMonederoDTO>> confirmarRecargaTesoreria(
+            @AuthenticationPrincipal CustomUserDetails user,
+            @PathVariable Long recargaId) {
+        RecargaMonederoDTO dto = monederoService.confirmarRecargaTesoreria(recargaId, user.getId());
+        return ResponseEntity
+                .ok(DataResponseDTO.success(dto, "Recarga confirmada por tesorería. Falta validación admin."));
+    }
+
+    @GetMapping("/recargas/tesoreria/{recargaId}/ticket")
+    @PreAuthorize("hasAnyRole('ALUMNO','TESORERIA','ADMINISTRADOR')")
+    @Operation(summary = "Obtener ticket/comprobante de recarga por tesorería")
+    public ResponseEntity<DataResponseDTO<RecargaMonederoDTO>> obtenerTicketRecargaTesoreria(
+            @PathVariable Long recargaId) {
+        RecargaMonederoDTO dto = monederoService.obtenerTicketRecargaTesoreria(recargaId);
+        return ResponseEntity.ok(DataResponseDTO.success(dto, "Ticket de recarga por tesorería"));
     }
 }

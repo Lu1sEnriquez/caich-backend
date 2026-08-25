@@ -130,7 +130,7 @@ public class SecurityConfig {
                                 "/espacios/**",
                                 "/inventario/productos/stock-bajo",
                                 "/inventario/productos/sin-stock")
-                        .hasAnyRole(Role.ADMINISTRADOR.getRoleValue(), Role.TERAPEUTA.getRoleValue(), Role.ALUMNO.getRoleValue())
+                        .hasAnyRole(Role.ADMINISTRADOR.getRoleValue(), Role.TERAPEUTA.getRoleValue(), Role.ALUMNO.getRoleValue(), Role.TESORERIA.getRoleValue())
 
                         // Endpoints de testing de roles
                         .requestMatchers(

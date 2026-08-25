@@ -3,13 +3,15 @@ package com.api_caich.enums;
 import lombok.Getter;
 
 @Getter
+
 public enum Role {
 
     // Roles principales del sistema
     ADMINISTRADOR("Administrador", "ROLE_ADMIN", "Acceso completo al sistema"),
     TERAPEUTA("Terapeuta", "ROLE_TERAPEUTA", "Gestión de citas y pacientes"),
     ALUMNO("Alumno", "ROLE_ALUMNO", "Acceso a préstamos de materiales"),
-    PACIENTE("Paciente", "ROLE_PACIENTE", "Acceso a sus citas e información");
+    PACIENTE("Paciente", "ROLE_PACIENTE", "Acceso a sus citas e información"),
+    TESORERIA("Tesorería", "ROLE_TESORERIA", "Gestión y validación de pagos en ventanilla");
 
     private final String nombre;
     private final String authority;

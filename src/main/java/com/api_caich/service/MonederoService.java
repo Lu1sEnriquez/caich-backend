@@ -91,12 +91,13 @@ public class MonederoService {
     // -------------------------------------------------------------------------
 
     /**
-     * El alumno solicita una recarga: sube su comprobante y queda PENDIENTE_REVISION.
+     * El alumno solicita una recarga: sube su comprobante y queda
+     * PENDIENTE_REVISION.
      */
     @Transactional
     public RecargaMonederoDTO solicitarRecarga(Long alumnoId,
-                                               CrearRecargaMonederoRequest request,
-                                               MultipartFile comprobante) {
+            CrearRecargaMonederoRequest request,
+            MultipartFile comprobante) {
         Usuario alumno = validarAlumno(alumnoId);
 
         // Guardar comprobante en disco / Drive
@@ -124,9 +125,9 @@ public class MonederoService {
      */
     @Transactional
     public RecargaMonederoDTO reintentarRecarga(Long alumnoId,
-                                                Long recargaId,
-                                                CrearRecargaMonederoRequest request,
-                                                MultipartFile comprobante) {
+            Long recargaId,
+            CrearRecargaMonederoRequest request,
+            MultipartFile comprobante) {
         RecargaMonedero recarga = recargaRepository.findById(recargaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Recarga no encontrada"));
 
@@ -179,7 +180,8 @@ public class MonederoService {
     }
 
     /**
-     * Admin aprueba una recarga: acredita el saldo al monedero con locking optimista.
+     * Admin aprueba una recarga: acredita el saldo al monedero con locking
+     * optimista.
      */
     @Transactional
     public RecargaMonederoDTO aprobarRecarga(Long recargaId, Long adminId) {
@@ -264,8 +266,8 @@ public class MonederoService {
      */
     @Transactional
     public com.api_caich.entity.Pago descontarSaldo(Long alumnoId,
-                                                     Ticket ticket,
-                                                     BigDecimal monto) {
+            Ticket ticket,
+            BigDecimal monto) {
         try {
             Monedero monedero = monederoRepository.findByAlumno_UsuarioId(alumnoId)
                     .orElseThrow(() -> new BusinessException("El alumno no tiene monedero activo"));
@@ -273,7 +275,7 @@ public class MonederoService {
             if (monedero.getSaldo().compareTo(monto) < 0) {
                 throw new BusinessException(
                         "Saldo insuficiente. Disponible: $" + monedero.getSaldo() +
-                        " | Requerido: $" + monto);
+                                " | Requerido: $" + monto);
             }
 
             BigDecimal saldoAnterior = monedero.getSaldo();
@@ -320,7 +322,7 @@ public class MonederoService {
         // Calcular monto a devolver (lo que se pagó con monedero)
         BigDecimal montoMonedero = ticket.getPagos().stream()
                 .filter(p -> p.getMetodoPago() == MetodoPago.MONEDERO
-                          && p.getEstado() == EstadoPagoTransaccion.APROBADO)
+                        && p.getEstado() == EstadoPagoTransaccion.APROBADO)
                 .map(com.api_caich.entity.Pago::getMonto)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
@@ -462,7 +464,8 @@ public class MonederoService {
             Long alumnoId, LocalDate desde, LocalDate hasta) {
 
         LocalDateTime dtDesde = (desde != null) ? desde.atStartOfDay() : LocalDate.of(2020, 1, 1).atStartOfDay();
-        LocalDateTime dtHasta = (hasta != null) ? hasta.plusDays(1).atStartOfDay() : LocalDate.now().plusDays(1).atStartOfDay();
+        LocalDateTime dtHasta = (hasta != null) ? hasta.plusDays(1).atStartOfDay()
+                : LocalDate.now().plusDays(1).atStartOfDay();
 
         if (alumnoId != null) {
             return movimientoRepository.findByAlumnoAndRangoFechas(alumnoId, dtDesde, dtHasta)
@@ -470,6 +473,73 @@ public class MonederoService {
         }
         return movimientoRepository.findByRangoFechas(dtDesde, dtHasta)
                 .stream().map(m -> toMovimientoDTO(m, true)).collect(Collectors.toList());
+    }
+
+    // -------------------------------------------------------------------------
+    // RECARGA POR TESORERÍA
+    // -------------------------------------------------------------------------
+
+    @Transactional
+    public RecargaMonederoDTO solicitarRecargaTesoreria(Long alumnoId, CrearRecargaMonederoRequest request) {
+        Usuario alumno = validarAlumno(alumnoId);
+        RecargaMonedero recarga = new RecargaMonedero();
+        recarga.setAlumno(alumno);
+        recarga.setMonto(request.getMonto());
+        recarga.setMetodoPago(MetodoPago.TESORERIA);
+        recarga.setConcepto(request.getConcepto() != null ? request.getConcepto() : "Recarga de saldo en ventanilla");
+        recarga.setEstado(EstadoRecargaMonedero.PENDIENTE_TESORERIA);
+        // Generar folio único (formato: T-YYMMDD-XXXX)
+        String folio = "T-" + java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyMMdd"))
+                + "-" + (int) (Math.random() * 9000 + 1000);
+        recarga.setFolio(folio);
+        recarga = recargaRepository.save(recarga);
+        // Notificar a tesorería (opcional)
+        // notificacionService.notificarNuevaRecargaTesoreria(alumnoId,
+        // recarga.getRecargaMonederoId(), request.getMonto());
+        return toRecargaDTO(recarga);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RecargaMonederoDTO> listarRecargasTesoreriaPendientes() {
+        return recargaRepository.findByMetodoPagoAndEstadoOrderByFechaSolicitudAsc(
+                MetodoPago.TESORERIA, EstadoRecargaMonedero.PENDIENTE_TESORERIA)
+                .stream().map(this::toRecargaDTO).collect(java.util.stream.Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<RecargaMonederoDTO> listarRecargasTesoreriaConfirmadas() {
+        return recargaRepository.findByMetodoPagoAndEstadoOrderByFechaSolicitudAsc(
+                MetodoPago.TESORERIA, EstadoRecargaMonedero.CONFIRMADO_TESORERIA)
+                .stream().map(this::toRecargaDTO).collect(java.util.stream.Collectors.toList());
+    }
+
+    @Transactional
+    public RecargaMonederoDTO confirmarRecargaTesoreria(Long recargaId, Long tesoreriaId) {
+        RecargaMonedero recarga = recargaRepository.findById(recargaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Recarga no encontrada"));
+        if (recarga.getEstado() != EstadoRecargaMonedero.PENDIENTE_TESORERIA) {
+            throw new BusinessException("La recarga no está pendiente de tesorería");
+        }
+        Usuario tesoreria = usuarioRepository.findById(tesoreriaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario tesorería no encontrado"));
+        recarga.setEstado(EstadoRecargaMonedero.CONFIRMADO_TESORERIA);
+        recarga.setVerificadoPor(tesoreria);
+        recarga.setFechaVerificacion(java.time.LocalDateTime.now());
+        recarga = recargaRepository.save(recarga);
+        // Notificar admin (opcional)
+        // notificacionService.notificarRecargaTesoreriaConfirmada(recarga.getAlumno().getUsuarioId(),
+        // recarga.getRecargaMonederoId());
+        return toRecargaDTO(recarga);
+    }
+
+    @Transactional(readOnly = true)
+    public RecargaMonederoDTO obtenerTicketRecargaTesoreria(Long recargaId) {
+        RecargaMonedero recarga = recargaRepository.findById(recargaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Recarga no encontrada"));
+        if (recarga.getMetodoPago() != MetodoPago.TESORERIA) {
+            throw new BusinessException("No es una recarga por tesorería");
+        }
+        return toRecargaDTO(recarga);
     }
 
     // -------------------------------------------------------------------------
@@ -502,9 +572,9 @@ public class MonederoService {
     }
 
     private void registrarMovimiento(Monedero monedero, TipoMovimientoMonedero tipo,
-                                     BigDecimal monto, BigDecimal saldoAnterior,
-                                     BigDecimal saldoNuevo, String descripcion,
-                                     Ticket ticket, RecargaMonedero recarga) {
+            BigDecimal monto, BigDecimal saldoAnterior,
+            BigDecimal saldoNuevo, String descripcion,
+            Ticket ticket, RecargaMonedero recarga) {
         MovimientoMonedero mov = new MovimientoMonedero();
         mov.setMonedero(monedero);
         mov.setTipo(tipo);
@@ -586,6 +656,9 @@ public class MonederoService {
                 .fechaSolicitud(r.getFechaSolicitud())
                 .fechaVerificacion(r.getFechaVerificacion())
                 .numeroIntento(r.getNumeroIntento())
+                .folio(r.getFolio())
+                .metodoPago(r.getMetodoPago() != null ? r.getMetodoPago().name() : null)
+                .concepto(r.getConcepto())
                 .build();
     }
 

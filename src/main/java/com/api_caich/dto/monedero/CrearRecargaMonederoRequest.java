@@ -2,6 +2,8 @@ package com.api_caich.dto.monedero;
 
 import java.math.BigDecimal;
 
+
+import com.api_caich.enums.MetodoPago;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
@@ -9,6 +11,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
+
 public class CrearRecargaMonederoRequest {
 
     @NotNull(message = "El monto es requerido")
@@ -18,4 +21,10 @@ public class CrearRecargaMonederoRequest {
     private String referenciaBancaria;
 
     private String notasAlumno;
+
+    /** Método de pago: TRANSFERENCIA, TESORERIA, etc. */
+    private MetodoPago metodoPago = MetodoPago.TRANSFERENCIA;
+
+    /** Concepto de pago (motivo, referencia para ticket). */
+    private String concepto;
 }

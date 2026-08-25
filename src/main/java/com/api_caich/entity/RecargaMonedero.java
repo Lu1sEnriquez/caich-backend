@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import com.api_caich.enums.EstadoRecargaMonedero;
+import com.api_caich.enums.MetodoPago;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -74,4 +75,17 @@ public class RecargaMonedero extends BaseEntity {
     /** Intento #n del alumno (para rastrear múltiples intentos tras rechazo). */
     @Column(name = "NumeroIntento", nullable = false)
     private Integer numeroIntento = 1;
+
+    /** Folio generado para recarga por tesorería. Null para otros métodos. */
+    @Column(name = "Folio", length = 20)
+    private String folio;
+
+    /** Método de pago: TRANSFERENCIA, TESORERIA, etc. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "MetodoPago", nullable = false, length = 20)
+    private MetodoPago metodoPago = MetodoPago.TRANSFERENCIA;
+
+    /** Concepto de pago (motivo, referencia para ticket). */
+    @Column(name = "Concepto", length = 200)
+    private String concepto;
 }

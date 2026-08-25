@@ -1,3 +1,4 @@
+
 package com.api_caich.dto.monedero;
 
 import java.math.BigDecimal;
@@ -20,10 +21,14 @@ public class RecargaMonederoDTO {
     private String comprobanteUrl;
     private String referenciaBancaria;
     private String notasAlumno;
-    private String estado;          // EstadoRecargaMonedero.name()
+    private String estado; // EstadoRecargaMonedero.name()
     private String motivoRechazo;
     private String verificadoPorNombre;
     private LocalDateTime fechaSolicitud;
     private LocalDateTime fechaVerificacion;
     private Integer numeroIntento;
+
+    private String folio;
+    private String metodoPago;
+    private String concepto;
 }

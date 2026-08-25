@@ -24,14 +24,19 @@ public interface RecargaMonederoRepository extends JpaRepository<RecargaMonedero
 
     /** Recargas dentro de un rango de fechas (para Excel admin). */
     @Query("""
-        SELECT r FROM RecargaMonedero r
-        WHERE r.fechaSolicitud BETWEEN :desde AND :hasta
-        ORDER BY r.fechaSolicitud DESC
-        """)
+            SELECT r FROM RecargaMonedero r
+            WHERE r.fechaSolicitud BETWEEN :desde AND :hasta
+            ORDER BY r.fechaSolicitud DESC
+            """)
     List<RecargaMonedero> findByRangoFechas(
             @Param("desde") LocalDateTime desde,
             @Param("hasta") LocalDateTime hasta);
 
     /** ¿Cuántas recargas pendientes hay? (para badge en sidebar admin). */
     long countByEstado(EstadoRecargaMonedero estado);
+
+    /** Recargas por método de pago y estado (para tesorería). */
+    List<RecargaMonedero> findByMetodoPagoAndEstadoOrderByFechaSolicitudAsc(
+            com.api_caich.enums.MetodoPago metodoPago,
+            com.api_caich.enums.EstadoRecargaMonedero estado);
 }

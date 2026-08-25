@@ -58,6 +58,17 @@ public class DataInitializer implements CommandLineRunner {
                 "6441000000",
                 LocalDateTime.now().minusMinutes(15));
 
+        // Usuario demo TESORERIA
+        created += crearUsuarioSiNoExiste(
+            "Tesorería CAICH",
+            "tesoreria@caich.com",
+            Role.TESORERIA,
+            EstadoUsuario.ACTIVO,
+            "TES-001",
+            null,
+            "6445000000",
+            LocalDateTime.now().minusMinutes(10));
+
         created += crearUsuarioSiNoExiste(
                 "Coordinación Recepción CAICH",
                 "recepcion1@caich.com",
