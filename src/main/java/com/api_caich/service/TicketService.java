@@ -923,6 +923,14 @@ public class TicketService {
                 break;
 
             case ALUMNO:
+                // El alumno solo puede consultar sus propias reservas y compras.
+                boolean esCreadorAlumno = ticket.getCreadoPor() != null
+                        && ticket.getCreadoPor().getUsuarioId().equals(usuarioId);
+                if (!esCreadorAlumno) {
+                    throw new BusinessException("No tiene acceso a este ticket");
+                }
+                break;
+
             default:
                 throw new BusinessException("No tiene permisos para ver tickets");
         }

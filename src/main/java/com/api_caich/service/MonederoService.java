@@ -509,7 +509,7 @@ public class MonederoService {
     @Transactional(readOnly = true)
     public List<RecargaMonederoDTO> listarRecargasTesoreriaConfirmadas() {
         return recargaRepository.findByMetodoPagoAndEstadoOrderByFechaSolicitudAsc(
-                MetodoPago.TESORERIA, EstadoRecargaMonedero.CONFIRMADO_TESORERIA)
+                MetodoPago.TESORERIA, EstadoRecargaMonedero.PENDIENTE_REVISION)
                 .stream().map(this::toRecargaDTO).collect(java.util.stream.Collectors.toList());
     }
 
@@ -522,7 +522,9 @@ public class MonederoService {
         }
         Usuario tesoreria = usuarioRepository.findById(tesoreriaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario tesorería no encontrado"));
-        recarga.setEstado(EstadoRecargaMonedero.CONFIRMADO_TESORERIA);
+        // Tesorería confirma que recibió el pago, pero no acredita el saldo.
+        // La recarga pasa a la cola que revisa Administración.
+        recarga.setEstado(EstadoRecargaMonedero.PENDIENTE_REVISION);
         recarga.setVerificadoPor(tesoreria);
         recarga.setFechaVerificacion(java.time.LocalDateTime.now());
         recarga = recargaRepository.save(recarga);

@@ -131,10 +131,10 @@ public class MonederoController {
 
     @GetMapping("/recargas/tesoreria/confirmadas")
     @PreAuthorize("hasRole('TESORERIA')")
-    @Operation(summary = "Listar recargas por tesorería ya confirmadas")
+    @Operation(summary = "Listar recargas por tesorería enviadas a revisión administrativa")
     public ResponseEntity<DataResponseDTO<List<RecargaMonederoDTO>>> listarRecargasTesoreriaConfirmadas() {
         List<RecargaMonederoDTO> lista = monederoService.listarRecargasTesoreriaConfirmadas();
-        return ResponseEntity.ok(DataResponseDTO.success(lista, "Recargas confirmadas en ventanilla"));
+        return ResponseEntity.ok(DataResponseDTO.success(lista, "Recargas enviadas a revisión administrativa"));
     }
 
     @PostMapping("/recargas/tesoreria/{recargaId}/confirmar")
@@ -145,7 +145,7 @@ public class MonederoController {
             @PathVariable Long recargaId) {
         RecargaMonederoDTO dto = monederoService.confirmarRecargaTesoreria(recargaId, user.getId());
         return ResponseEntity
-                .ok(DataResponseDTO.success(dto, "Recarga confirmada por tesorería. Falta validación admin."));
+                .ok(DataResponseDTO.success(dto, "Pago confirmado por tesorería. Pendiente de validación administrativa."));
     }
 
     @GetMapping("/recargas/tesoreria/{recargaId}/ticket")

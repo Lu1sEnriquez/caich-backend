@@ -96,10 +96,16 @@ public class SecurityConfig {
                                 "/admin/monedero/**")
                         .hasRole(Role.ADMINISTRADOR.getRoleValue())
 
-                        // Endpoints ALUMNO y TERAPEUTA — monedero propio
+                        // El controlador limita cada operación del monedero con @PreAuthorize.
+                        // Aquí deben poder entrar también Tesorería (confirmación de pagos)
+                        // y Administración (validación final de recargas).
                         .requestMatchers(
                                 "/monedero/**"
-                        ).hasAnyRole(Role.ALUMNO.getRoleValue(), Role.TERAPEUTA.getRoleValue())
+                        ).hasAnyRole(
+                                Role.ADMINISTRADOR.getRoleValue(),
+                                Role.TERAPEUTA.getRoleValue(),
+                                Role.ALUMNO.getRoleValue(),
+                                Role.TESORERIA.getRoleValue())
 
                         // Endpoints PACIENTE
                         .requestMatchers(

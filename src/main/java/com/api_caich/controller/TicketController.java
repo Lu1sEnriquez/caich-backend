@@ -133,7 +133,7 @@ public class TicketController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA', 'PACIENTE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA', 'PACIENTE', 'ALUMNO')")
     @Operation(summary = "Get tickets with filters (basic info)", description = "Get paginated and filtered tickets with basic information based on user role")
     public ResponseEntity<DataResponseDTO<Page<TicketBasicoDTO>>> obtenerTicketsBasico(
             @Parameter(description = "Patient ID") @RequestParam(required = false) Long pacienteId,
@@ -174,7 +174,7 @@ public class TicketController {
     }
 
     @GetMapping("/{ticketId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA', 'PACIENTE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA', 'PACIENTE', 'ALUMNO')")
     @Operation(summary = "Get ticket by ID (detailed)", description = "Get complete ticket details with all related data, with access control based on user role")
     public ResponseEntity<DataResponseDTO<TicketDTO>> obtenerTicketDetallado(
             @Parameter(description = "Ticket ID") @PathVariable Long ticketId,

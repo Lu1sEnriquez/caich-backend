@@ -7,6 +7,7 @@ import java.time.LocalTime;
 import com.api_caich.enums.Role;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +26,7 @@ import com.api_caich.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 
 @Component
+@Profile("!prod")
 @Order(1)
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
