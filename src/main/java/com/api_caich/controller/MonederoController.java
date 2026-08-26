@@ -54,7 +54,7 @@ public class MonederoController {
     // ─── SALDO ───────────────────────────────────────────────────────────────
 
     @GetMapping("/mi-saldo")
-    @PreAuthorize("hasAnyRole('ALUMNO','TERAPEUTA')")
+    @PreAuthorize("hasRole('ALUMNO')")
     @Operation(summary = "Obtener mi monedero y saldo actual")
     public ResponseEntity<DataResponseDTO<MonederoDTO>> obtenerMiMonedero(
             @AuthenticationPrincipal CustomUserDetails user) {
@@ -65,7 +65,7 @@ public class MonederoController {
     // ─── MOVIMIENTOS ─────────────────────────────────────────────────────────
 
     @GetMapping("/mis-movimientos")
-    @PreAuthorize("hasAnyRole('ALUMNO','TERAPEUTA')")
+    @PreAuthorize("hasRole('ALUMNO')")
     @Operation(summary = "Historial de movimientos paginado del usuario")
     public ResponseEntity<DataResponseDTO<Page<MovimientoMonederoDTO>>> obtenerMisMovimientos(
             @AuthenticationPrincipal CustomUserDetails user,
@@ -77,7 +77,7 @@ public class MonederoController {
     // ─── RECARGAS ─────────────────────────────────────────────────────────────
 
     @PostMapping(value = "/recargas", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('ALUMNO','TERAPEUTA')")
+    @PreAuthorize("hasRole('ALUMNO')")
     @Operation(summary = "Solicitar recarga de saldo (subir comprobante)")
     public ResponseEntity<DataResponseDTO<RecargaMonederoDTO>> solicitarRecarga(
             @AuthenticationPrincipal CustomUserDetails user,
@@ -88,7 +88,7 @@ public class MonederoController {
     }
 
     @PostMapping(value = "/recargas/{recargaId}/reintentar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('ALUMNO','TERAPEUTA')")
+    @PreAuthorize("hasRole('ALUMNO')")
     @Operation(summary = "Reintentar una recarga rechazada con comprobante corregido")
     public ResponseEntity<DataResponseDTO<RecargaMonederoDTO>> reintentarRecarga(
             @AuthenticationPrincipal CustomUserDetails user,
@@ -100,7 +100,7 @@ public class MonederoController {
     }
 
     @GetMapping("/mis-recargas")
-    @PreAuthorize("hasAnyRole('ALUMNO','TERAPEUTA')")
+    @PreAuthorize("hasRole('ALUMNO')")
     @Operation(summary = "Historial de solicitudes de recarga del usuario")
     public ResponseEntity<DataResponseDTO<List<RecargaMonederoDTO>>> obtenerMisRecargas(
             @AuthenticationPrincipal CustomUserDetails user) {

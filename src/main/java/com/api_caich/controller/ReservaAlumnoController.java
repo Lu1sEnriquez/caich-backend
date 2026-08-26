@@ -15,9 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 import com.api_caich.dto.DataResponseDTO;
 import com.api_caich.dto.horario.DisponibilidadDTO;
@@ -49,67 +47,8 @@ public class ReservaAlumnoController {
     private final UsuarioService usuarioService;
     private final ObjectMapper objectMapper;
 
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('ALUMNO', 'TERAPEUTA')")
-    @Operation(summary = "Create student reservation with comprobante",
-               description = "Create a cubicle reservation uploading a payment proof (comprobante). Requires admin approval.")
-    public ResponseEntity<DataResponseDTO<ReservaAlumnoResponseDTO>> crearReservaAlumno(
-            @RequestParam("espacioId") Long espacioId,
-            @RequestParam("fecha") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
-            @RequestParam("horaInicio") @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime horaInicio,
-            @RequestParam("horaFin") @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime horaFin,
-            @RequestParam(value = "notas", required = false) String notas,
-            @RequestParam("celular") String celular,
-            @RequestParam("actividad") String actividad,
-            @RequestParam("maestro") String maestro,
-            @RequestParam(value = "productos", required = false) String productosJson,
-            @RequestParam(value = "prestamos", required = false) String prestamosJson,
-            @RequestParam(value = "pacienteId", required = false) Long pacienteId,
-            @RequestParam(value = "pacienteNuevo", required = false) String pacienteNuevoJson,
-            @RequestPart("comprobante") MultipartFile comprobante,
-            @AuthenticationPrincipal CustomUserDetails userDetails) throws Exception {
-
-        List<CrearReservaAlumnoDTO.ProductoLineaDTO> productos = Collections.emptyList();
-        if (productosJson != null && !productosJson.isBlank()) {
-            productos = objectMapper.readValue(productosJson,
-                    new TypeReference<List<CrearReservaAlumnoDTO.ProductoLineaDTO>>() {});
-        }
-
-        List<CrearReservaAlumnoDTO.PrestamoLineaDTO> prestamos = Collections.emptyList();
-        if (prestamosJson != null && !prestamosJson.isBlank()) {
-            prestamos = objectMapper.readValue(prestamosJson,
-                    new TypeReference<List<CrearReservaAlumnoDTO.PrestamoLineaDTO>>() {});
-        }
-
-        CrearReservaAlumnoDTO.PacienteNuevoDTO pacienteNuevo = null;
-        if (pacienteNuevoJson != null && !pacienteNuevoJson.isBlank()) {
-            pacienteNuevo = objectMapper.readValue(pacienteNuevoJson,
-                    CrearReservaAlumnoDTO.PacienteNuevoDTO.class);
-        }
-
-        CrearReservaAlumnoDTO request = CrearReservaAlumnoDTO.builder()
-                .espacioId(espacioId)
-                .fecha(fecha)
-                .horaInicio(horaInicio)
-                .horaFin(horaFin)
-                .notas(notas)
-                .celular(celular)
-                .actividad(actividad)
-                .maestro(maestro)
-                .productos(productos)
-                .prestamos(prestamos)
-                .pacienteId(pacienteId)
-                .pacienteNuevo(pacienteNuevo)
-                .build();
-
-        ReservaAlumnoResponseDTO response = reservaAlumnoService.crearReservaConPago(
-                request, comprobante, userDetails.getId());
-
-        return ResponseEntity.ok(DataResponseDTO.success(response, "Reserva creada exitosamente"));
-    }
-
     @PostMapping(value = "/con-monedero", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('ALUMNO', 'TERAPEUTA')")
+    @PreAuthorize("hasRole('ALUMNO')")
     @Operation(summary = "Create student reservation paying with wallet",
                description = "Create a confirmed cubicle reservation by deducting saldo from the student's monedero. No admin review required for payment.")
     public ResponseEntity<DataResponseDTO<ReservaAlumnoResponseDTO>> crearReservaConMonedero(
@@ -166,7 +105,7 @@ public class ReservaAlumnoController {
     }
 
     @GetMapping("/mis-reservas")
-    @PreAuthorize("hasAnyRole('ALUMNO', 'TERAPEUTA')")
+    @PreAuthorize("hasRole('ALUMNO')")
     @Operation(summary = "Get my reservations", 
                description = "Get all reservations for the authenticated student")
     public ResponseEntity<DataResponseDTO<List<MisReservasDTO>>> obtenerMisReservas(
@@ -181,7 +120,7 @@ public class ReservaAlumnoController {
     }
 
     @GetMapping("/disponibilidad/{espacioId}/{fecha}")
-    @PreAuthorize("hasAnyRole('ALUMNO', 'TERAPEUTA')")
+    @PreAuthorize("hasRole('ALUMNO')")
     @Operation(summary = "Get availability", 
                description = "Get available time slots for a specific cubicle and date")
     public ResponseEntity<DataResponseDTO<DisponibilidadDTO>> obtenerDisponibilidad(
@@ -194,7 +133,7 @@ public class ReservaAlumnoController {
     }
 
     @GetMapping("/pacientes/buscar")
-    @PreAuthorize("hasAnyRole('ALUMNO', 'TERAPEUTA')")
+    @PreAuthorize("hasRole('ALUMNO')")
     @Operation(summary = "Buscar pacientes por nombre",
                description = "Devuelve pacientes activos cuyo nombre coincida con el término buscado. Usado para seleccionar paciente al crear reserva.")
     public ResponseEntity<DataResponseDTO<List<UsuarioDTO>>> buscarPacientes(

@@ -593,10 +593,8 @@ public class MonederoService {
     private Usuario validarAlumno(Long alumnoId) {
         Usuario usuario = usuarioRepository.findById(alumnoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
-        boolean tieneAcceso = usuario.getRol().equalsIgnoreCase(Role.ALUMNO.getNombre())
-                || usuario.getRol().equalsIgnoreCase(Role.TERAPEUTA.getNombre());
-        if (!tieneAcceso) {
-            throw new BusinessException("Solo los alumnos y terapeutas pueden usar el monedero");
+        if (!usuario.getRol().equalsIgnoreCase(Role.ALUMNO.getNombre())) {
+            throw new BusinessException("Solo los alumnos pueden usar el monedero");
         }
         return usuario;
     }
