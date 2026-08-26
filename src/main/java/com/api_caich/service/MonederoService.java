@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -49,6 +50,9 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class MonederoService {
+
+    /** Conserva una cancelación diferenciable sin introducir un estado nuevo en la BD existente. */
+    private static final String MOTIVO_CANCELADA_POR_ALUMNO = "Cancelada por el alumno";
 
     private final MonederoRepository monederoRepository;
     private final MovimientoMonederoRepository movimientoRepository;
@@ -137,6 +141,9 @@ public class MonederoService {
         if (recarga.getEstado() != EstadoRecargaMonedero.RECHAZADO) {
             throw new BusinessException("Solo se puede reintentar una recarga rechazada");
         }
+        if (MOTIVO_CANCELADA_POR_ALUMNO.equals(recarga.getMotivoRechazo())) {
+            throw new BusinessException("La solicitud fue cancelada y no se puede reintentar");
+        }
 
         String comprobanteUrl = fileStorageService.almacenarComprobanteRecarga(comprobante, alumnoId);
 
@@ -195,30 +202,7 @@ public class MonederoService {
         Usuario admin = usuarioRepository.findById(adminId)
                 .orElseThrow(() -> new ResourceNotFoundException("Admin no encontrado"));
 
-        // Acreditar saldo (con manejo de conflicto optimista)
-        try {
-            Monedero monedero = obtenerOCrearMonedero(recarga.getAlumno().getUsuarioId());
-            BigDecimal saldoAnterior = monedero.getSaldo();
-            BigDecimal saldoNuevo = saldoAnterior.add(recarga.getMonto());
-
-            monedero.setSaldo(saldoNuevo);
-            monederoRepository.save(monedero);
-
-            // Registrar movimiento
-            registrarMovimiento(monedero, TipoMovimientoMonedero.RECARGA,
-                    recarga.getMonto(), saldoAnterior, saldoNuevo,
-                    "Recarga aprobada por " + admin.getNombreCompleto(),
-                    null, recarga);
-
-            // Actualizar estado de la recarga
-            recarga.setEstado(EstadoRecargaMonedero.APROBADO);
-            recarga.setVerificadoPor(admin);
-            recarga.setFechaVerificacion(LocalDateTime.now());
-            recarga = recargaRepository.save(recarga);
-
-        } catch (ObjectOptimisticLockingFailureException ex) {
-            throw new BusinessException("El monedero fue modificado concurrentemente. Intente de nuevo.");
-        }
+        recarga = acreditarRecarga(recarga, admin, "administración");
 
         notificacionService.notificarRecargaAprobada(
                 recarga.getAlumno().getUsuarioId(), recarga.getMonto());
@@ -509,7 +493,7 @@ public class MonederoService {
     @Transactional(readOnly = true)
     public List<RecargaMonederoDTO> listarRecargasTesoreriaConfirmadas() {
         return recargaRepository.findByMetodoPagoAndEstadoOrderByFechaSolicitudAsc(
-                MetodoPago.TESORERIA, EstadoRecargaMonedero.PENDIENTE_REVISION)
+                MetodoPago.TESORERIA, EstadoRecargaMonedero.APROBADO)
                 .stream().map(this::toRecargaDTO).collect(java.util.stream.Collectors.toList());
     }
 
@@ -522,25 +506,108 @@ public class MonederoService {
         }
         Usuario tesoreria = usuarioRepository.findById(tesoreriaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario tesorería no encontrado"));
-        // Tesorería confirma que recibió el pago, pero no acredita el saldo.
-        // La recarga pasa a la cola que revisa Administración.
-        recarga.setEstado(EstadoRecargaMonedero.PENDIENTE_REVISION);
-        recarga.setVerificadoPor(tesoreria);
-        recarga.setFechaVerificacion(java.time.LocalDateTime.now());
+        // La ventanilla es quien recibe el efectivo; su confirmación es la
+        // validación final. Así la recarga no pasa por una segunda aprobación.
+        recarga = acreditarRecarga(recarga, tesoreria, "tesorería");
+        notificacionService.notificarRecargaAprobada(
+                recarga.getAlumno().getUsuarioId(), recarga.getMonto());
+        return toRecargaDTO(recarga);
+    }
+
+    @Transactional
+    public RecargaMonederoDTO adjuntarComprobanteTesoreria(Long alumnoId, Long recargaId, MultipartFile comprobante) {
+        RecargaMonedero recarga = recargaRepository.findById(recargaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Recarga no encontrada"));
+        if (!recarga.getAlumno().getUsuarioId().equals(alumnoId)) {
+            throw new BusinessException("No tiene permiso para modificar esta recarga");
+        }
+        if (recarga.getMetodoPago() != MetodoPago.TESORERIA) {
+            throw new BusinessException("Esta recarga no corresponde a tesorería");
+        }
+        boolean esPrimerComprobante = recarga.getEstado() == EstadoRecargaMonedero.PENDIENTE_TESORERIA;
+        if (!esPrimerComprobante && recarga.getEstado() != EstadoRecargaMonedero.PENDIENTE_REVISION) {
+            throw new BusinessException("No se puede cambiar el comprobante de esta recarga");
+        }
+        recarga.setComprobanteUrl(fileStorageService.almacenarComprobanteRecarga(comprobante, alumnoId));
+        if (esPrimerComprobante) {
+            // Subir el recibo completa el paso del alumno: Finanzas recibe la solicitud sin
+            // requerir un segundo botón de envío.
+            recarga.setEstado(EstadoRecargaMonedero.PENDIENTE_REVISION);
+        }
         recarga = recargaRepository.save(recarga);
-        // Notificar admin (opcional)
-        // notificacionService.notificarRecargaTesoreriaConfirmada(recarga.getAlumno().getUsuarioId(),
-        // recarga.getRecargaMonederoId());
+        if (esPrimerComprobante) {
+            notificacionService.notificarNuevaRecargaMonedero(
+                    alumnoId, recarga.getRecargaMonederoId(), recarga.getMonto());
+        }
+        return toRecargaDTO(recarga);
+    }
+
+    @Transactional
+    public RecargaMonederoDTO enviarRecargaTesoreriaAFinanzas(Long alumnoId, Long recargaId) {
+        RecargaMonedero recarga = recargaRepository.findById(recargaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Recarga no encontrada"));
+        if (!recarga.getAlumno().getUsuarioId().equals(alumnoId)) {
+            throw new BusinessException("No tiene permiso para modificar esta recarga");
+        }
+        if (recarga.getMetodoPago() != MetodoPago.TESORERIA
+                || recarga.getEstado() != EstadoRecargaMonedero.PENDIENTE_TESORERIA) {
+            throw new BusinessException("Esta recarga no está disponible para enviar a Finanzas");
+        }
+        if (recarga.getComprobanteUrl() == null || recarga.getComprobanteUrl().isBlank()) {
+            throw new BusinessException("Adjunta el recibo de Tesorería antes de enviarlo a Finanzas");
+        }
+        recarga.setEstado(EstadoRecargaMonedero.PENDIENTE_REVISION);
+        recarga = recargaRepository.save(recarga);
+        notificacionService.notificarNuevaRecargaMonedero(alumnoId, recarga.getRecargaMonederoId(), recarga.getMonto());
+        return toRecargaDTO(recarga);
+    }
+
+    /**
+     * Cancela una solicitud que todavía no ha sido procesada ni acreditada.
+     * La tabla productiva sólo permite los estados actuales; se preserva el
+     * historial como RECHAZADO con una razón explícita, sin generar movimiento.
+     */
+    @Transactional
+    public RecargaMonederoDTO cancelarRecargaTesoreria(Long alumnoId, Long recargaId) {
+        RecargaMonedero recarga = recargaRepository.findById(recargaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Recarga no encontrada"));
+        if (!recarga.getAlumno().getUsuarioId().equals(alumnoId)) {
+            throw new BusinessException("No tiene permiso para cancelar esta recarga");
+        }
+        if (recarga.getMetodoPago() != MetodoPago.TESORERIA
+                || recarga.getEstado() != EstadoRecargaMonedero.PENDIENTE_TESORERIA) {
+            throw new BusinessException("Solo se puede cancelar una recarga pendiente de Tesorería");
+        }
+
+        recarga.setEstado(EstadoRecargaMonedero.RECHAZADO);
+        recarga.setMotivoRechazo(MOTIVO_CANCELADA_POR_ALUMNO);
+        recarga = recargaRepository.save(recarga);
         return toRecargaDTO(recarga);
     }
 
     @Transactional(readOnly = true)
-    public RecargaMonederoDTO obtenerTicketRecargaTesoreria(Long recargaId) {
+    public Resource obtenerComprobanteRecarga(Long solicitanteId, Long recargaId) {
+        RecargaMonedero recarga = recargaRepository.findById(recargaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Recarga no encontrada"));
+        validarAccesoARecarga(solicitanteId, recarga);
+
+        String comprobanteUrl = recarga.getComprobanteUrl();
+        String prefijoRecargas = "/uploads/recargas/";
+        if (comprobanteUrl == null || !comprobanteUrl.startsWith(prefijoRecargas)) {
+            throw new ResourceNotFoundException("Comprobante de recarga no encontrado");
+        }
+        String nombreArchivo = comprobanteUrl.substring(prefijoRecargas.length());
+        return fileStorageService.cargarArchivo("recargas", nombreArchivo);
+    }
+
+    @Transactional(readOnly = true)
+    public RecargaMonederoDTO obtenerTicketRecargaTesoreria(Long solicitanteId, Long recargaId) {
         RecargaMonedero recarga = recargaRepository.findById(recargaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Recarga no encontrada"));
         if (recarga.getMetodoPago() != MetodoPago.TESORERIA) {
             throw new BusinessException("No es una recarga por tesorería");
         }
+        validarAccesoARecarga(solicitanteId, recarga);
         return toRecargaDTO(recarga);
     }
 
@@ -590,6 +657,29 @@ public class MonederoService {
         movimientoRepository.save(mov);
     }
 
+    /** Acredita una recarga ya validada y registra el movimiento una sola vez. */
+    private RecargaMonedero acreditarRecarga(RecargaMonedero recarga, Usuario verificador, String canal) {
+        try {
+            Monedero monedero = obtenerOCrearMonedero(recarga.getAlumno().getUsuarioId());
+            BigDecimal saldoAnterior = monedero.getSaldo();
+            BigDecimal saldoNuevo = saldoAnterior.add(recarga.getMonto());
+
+            monedero.setSaldo(saldoNuevo);
+            monederoRepository.save(monedero);
+            registrarMovimiento(monedero, TipoMovimientoMonedero.RECARGA,
+                    recarga.getMonto(), saldoAnterior, saldoNuevo,
+                    "Recarga confirmada por " + canal + ": " + verificador.getNombreCompleto(),
+                    null, recarga);
+
+            recarga.setEstado(EstadoRecargaMonedero.APROBADO);
+            recarga.setVerificadoPor(verificador);
+            recarga.setFechaVerificacion(LocalDateTime.now());
+            return recargaRepository.save(recarga);
+        } catch (ObjectOptimisticLockingFailureException ex) {
+            throw new BusinessException("El monedero fue modificado concurrentemente. Intente de nuevo.");
+        }
+    }
+
     private Usuario validarAlumno(Long alumnoId) {
         Usuario usuario = usuarioRepository.findById(alumnoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
@@ -597,6 +687,16 @@ public class MonederoService {
             throw new BusinessException("Solo los alumnos pueden usar el monedero");
         }
         return usuario;
+    }
+
+    /** Un alumno sólo puede consultar sus recargas; Tesorería y Administración pueden verificarlas. */
+    private void validarAccesoARecarga(Long solicitanteId, RecargaMonedero recarga) {
+        Usuario solicitante = usuarioRepository.findById(solicitanteId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        if (solicitante.getRol().equalsIgnoreCase(Role.ALUMNO.getNombre())
+                && !recarga.getAlumno().getUsuarioId().equals(solicitanteId)) {
+            throw new BusinessException("No tiene permiso para consultar esta recarga");
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -655,6 +755,7 @@ public class MonederoService {
                 .verificadoPorNombre(r.getVerificadoPor() != null ? r.getVerificadoPor().getNombreCompleto() : null)
                 .fechaSolicitud(r.getFechaSolicitud())
                 .fechaVerificacion(r.getFechaVerificacion())
+                .ultimaActualizacion(r.getUltimaActualizacion())
                 .numeroIntento(r.getNumeroIntento())
                 .folio(r.getFolio())
                 .metodoPago(r.getMetodoPago() != null ? r.getMetodoPago().name() : null)

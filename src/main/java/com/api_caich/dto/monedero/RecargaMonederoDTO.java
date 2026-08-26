@@ -26,6 +26,7 @@ public class RecargaMonederoDTO {
     private String verificadoPorNombre;
     private LocalDateTime fechaSolicitud;
     private LocalDateTime fechaVerificacion;
+    private LocalDateTime ultimaActualizacion;
     private Integer numeroIntento;
 
     private String folio;

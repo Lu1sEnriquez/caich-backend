@@ -48,6 +48,9 @@ public class SecurityConfig {
                         .requestMatchers("/motivos-sancion/**").hasRole(Role.ADMINISTRADOR.getRoleValue())
 
                         // Endpoints públicos
+                        // Los comprobantes de recarga se entregan sólo por el endpoint de Monedero,
+                        // que valida al propietario y el rol antes de devolver el archivo.
+                        .requestMatchers("/uploads/recargas/**").denyAll()
                         .requestMatchers(
                                 "/auth/**",
                                 "/v3/api-docs/**",
@@ -60,10 +63,6 @@ public class SecurityConfig {
                                 "/assets/**" // Permitir acceso a assets estáticos
                         )
                         .permitAll()
-
-                        // Acceso a comprobantes de recargas — solo alumno dueño o admin
-                        // (se controla por @PreAuthorize en FileController si existe,
-                        //  o la ruta /uploads/** ya es pública para simplificar en desarrollo)
 
                         // Comprobantes de pago (permitir acceso autenticado por rol)
                         .requestMatchers("/pagos/comprobantes/**", "/pagos/subir-comprobante", "/pagos/ticket/**")
