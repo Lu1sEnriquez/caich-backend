@@ -1,5 +1,15 @@
 # Scripts locales de CAICH
 
+## Despliegue Windows con IIS
+
+La guía completa de instalación, servicios Windows y actualizaciones está en
+`../../caich-front/DEPLOYMENT_IIS.md`. Para actualizaciones posteriores al
+setup inicial usa:
+
+```powershell
+.\scripts\windows\deploy-caich.ps1 -Component All
+```
+
 Estos scripts son exclusivamente para desarrollo local. No se deben ejecutar en producción.
 
 ## Reiniciar la base con el seed

@@ -18,6 +18,12 @@ public class TicketRequestDTO {
     @NotNull(message = "El usuario creador es requerido")
     private Long creadoPorId;
 
+    /** Persona que recibe la venta o servicio y, en su caso, liquida el ticket. */
+    private Long compradorId;
+
+    /** Solo para alumnos: descuenta el total del monedero al crear el ticket. */
+    private Boolean cobrarConMonedero = false;
+
     private EstadoTicket estadoTicket = EstadoTicket.BORRADOR;
 
     private EstadoFinanciero estadoFinanciero = EstadoFinanciero.PENDIENTE;

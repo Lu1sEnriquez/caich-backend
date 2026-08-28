@@ -186,6 +186,13 @@ public class MonederoService {
         return recargaRepository.findAllByOrderByFechaSolicitudDesc(pageable).map(this::toRecargaDTO);
     }
 
+    /** Historial completo de recargas de un alumno, para consulta administrativa. */
+    @Transactional(readOnly = true)
+    public List<RecargaMonederoDTO> obtenerRecargasDeAlumno(Long alumnoId) {
+        return recargaRepository.findByAlumno_UsuarioIdOrderByFechaSolicitudDesc(alumnoId)
+                .stream().map(this::toRecargaDTO).collect(Collectors.toList());
+    }
+
     /**
      * Admin aprueba una recarga: acredita el saldo al monedero con locking
      * optimista.
@@ -269,7 +276,7 @@ public class MonederoService {
 
             registrarMovimiento(monedero, TipoMovimientoMonedero.CONSUMO,
                     monto, saldoAnterior, saldoNuevo,
-                    "Pago de reserva: " + ticket.getFolio(),
+                    "Pago con monedero: " + ticket.getFolio(),
                     ticket, null);
 
             // Crear registro Pago con estado APROBADO (no necesita validación manual)
@@ -314,7 +321,10 @@ public class MonederoService {
             return; // No hay nada que devolver
         }
 
-        Monedero monedero = monederoRepository.findByAlumno_UsuarioId(ticket.getCreadoPor().getUsuarioId())
+        Long alumnoId = ticket.getComprador() != null
+                ? ticket.getComprador().getUsuarioId()
+                : ticket.getCreadoPor().getUsuarioId();
+        Monedero monedero = monederoRepository.findByAlumno_UsuarioId(alumnoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Monedero no encontrado para devolución"));
 
         SolicitudDevolucionMonedero solicitud = new SolicitudDevolucionMonedero();

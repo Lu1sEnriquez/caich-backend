@@ -77,6 +77,14 @@ public class MonederoAdminController {
                 monederoService.obtenerTodasLasRecargas(pageable), "Recargas obtenidas"));
     }
 
+    @GetMapping("/alumnos/{alumnoId}/recargas")
+    @Operation(summary = "Historial de recargas de un alumno")
+    public ResponseEntity<DataResponseDTO<List<RecargaMonederoDTO>>> obtenerRecargasDeAlumno(
+            @PathVariable Long alumnoId) {
+        return ResponseEntity.ok(DataResponseDTO.success(
+                monederoService.obtenerRecargasDeAlumno(alumnoId), "Recargas del alumno obtenidas"));
+    }
+
     @PostMapping("/recargas/{recargaId}/aprobar")
     @Operation(summary = "Aprobar una recarga: acredita el saldo al monedero del alumno")
     public ResponseEntity<DataResponseDTO<RecargaMonederoDTO>> aprobarRecarga(

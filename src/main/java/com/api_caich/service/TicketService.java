@@ -80,6 +80,17 @@ public class TicketService {
         Usuario creadoPor = usuarioRepository.findById(creadoPorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario creador no encontrado"));
 
+        Usuario comprador = null;
+        if (request.getCompradorId() != null) {
+            comprador = usuarioRepository.findById(request.getCompradorId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Comprador no encontrado"));
+        }
+
+        if (Boolean.TRUE.equals(request.getCobrarConMonedero())
+                && (comprador == null || !Role.ALUMNO.getNombre().equalsIgnoreCase(comprador.getRol()))) {
+            throw new BusinessException("El cobro con monedero solo está disponible para alumnos");
+        }
+
         // 2. Generar folio único
         String folio = folioGenerator.generarFolioTicket();
 
@@ -87,6 +98,7 @@ public class TicketService {
         Ticket ticket = new Ticket();
         ticket.setFolio(folio);
         ticket.setCreadoPor(creadoPor);
+        ticket.setComprador(comprador);
         ticket.setEstadoTicket(request.getEstadoTicket());
         ticket.setEstadoFinanciero(request.getEstadoFinanciero());
         ticket.setCostoAdicional(request.getCostoAdicional() != null ? request.getCostoAdicional() : BigDecimal.ZERO);
@@ -264,6 +276,15 @@ public class TicketService {
 
         // 9. Guardar todo en una sola transacción
         Ticket ticketGuardado = ticketRepository.save(ticket);
+
+        // El cobro desde monedero es inmediato y deja el movimiento ligado al ticket.
+        if (Boolean.TRUE.equals(request.getCobrarConMonedero())) {
+            monederoService.descontarSaldo(
+                    comprador.getUsuarioId(), ticketGuardado, ticketGuardado.getMontoTotal());
+            ticketGuardado.setMontoPagado(ticketGuardado.getMontoTotal());
+            ticketGuardado.setEstadoFinanciero(EstadoFinanciero.PAGADO);
+            ticketGuardado = ticketRepository.save(ticketGuardado);
+        }
 
         // 10. Registrar auditoría
         auditoriaService.registrarCambio("Tickets", ticketGuardado.getTicketId(), "Crear",

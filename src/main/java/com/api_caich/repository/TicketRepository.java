@@ -134,19 +134,15 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
         SELECT DISTINCT t FROM Ticket t 
         LEFT JOIN t.cita c 
         LEFT JOIN t.espacios te
+        LEFT JOIN t.comprador comprador
         WHERE (
             c.paciente.usuarioId = :pacienteId
+            OR comprador.usuarioId = :pacienteId
             OR (c IS NULL AND t.creadoPor.usuarioId = :pacienteId)
         )
         AND (:estadoTicket IS NULL OR t.estadoTicket = :estadoTicket)
-        AND (
-            (c IS NOT NULL AND c.fechaInicio >= COALESCE(:fechaInicio, c.fechaInicio))
-            OR (c IS NULL AND te.horaInicioReserva >= COALESCE(:fechaInicio, te.horaInicioReserva))
-        )
-        AND (
-            (c IS NOT NULL AND c.fechaInicio <= COALESCE(:fechaFin, c.fechaInicio))
-            OR (c IS NULL AND te.horaInicioReserva <= COALESCE(:fechaFin, te.horaInicioReserva))
-        )
+        AND (COALESCE(c.fechaInicio, te.horaInicioReserva, t.fechaCreacion) >= COALESCE(:fechaInicio, COALESCE(c.fechaInicio, te.horaInicioReserva, t.fechaCreacion)))
+        AND (COALESCE(c.fechaInicio, te.horaInicioReserva, t.fechaCreacion) <= COALESCE(:fechaFin, COALESCE(c.fechaInicio, te.horaInicioReserva, t.fechaCreacion)))
     """)
     Page<Ticket> findByPacienteWithFilters(
             @Param("pacienteId") Long pacienteId,
@@ -193,14 +189,11 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
     @Query("""
         SELECT DISTINCT t FROM Ticket t 
         LEFT JOIN t.espacios te
-        WHERE t.creadoPor.usuarioId = :alumnoId
+        LEFT JOIN t.comprador comprador
+        WHERE (t.creadoPor.usuarioId = :alumnoId OR comprador.usuarioId = :alumnoId)
         AND (:estadoTicket IS NULL OR t.estadoTicket = :estadoTicket)
-        AND (
-            te.horaInicioReserva >= COALESCE(:fechaInicio, te.horaInicioReserva)
-        )
-        AND (
-            te.horaInicioReserva <= COALESCE(:fechaFin, te.horaInicioReserva)
-        )
+        AND (COALESCE(te.horaInicioReserva, t.fechaCreacion) >= COALESCE(:fechaInicio, COALESCE(te.horaInicioReserva, t.fechaCreacion)))
+        AND (COALESCE(te.horaInicioReserva, t.fechaCreacion) <= COALESCE(:fechaFin, COALESCE(te.horaInicioReserva, t.fechaCreacion)))
     """)
     Page<Ticket> findByAlumnoWithFilters(
             @Param("alumnoId") Long alumnoId,

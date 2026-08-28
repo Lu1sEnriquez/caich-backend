@@ -1,16 +1,15 @@
-version: '3.8'
-
 services:
   database:
     build:
       context: ./docker/mssql
       dockerfile: Dockerfile
     container_name: sqlserver_caich
+    restart: unless-stopped
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=UserP@ssw0rd!
     ports:
-      - "1433:1433"
+      - "1438:1433"
     volumes:
       - sqlserver_data:/var/opt/mssql
     healthcheck:

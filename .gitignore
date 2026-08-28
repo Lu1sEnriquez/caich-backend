@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Archivos generados durante ejecución local
+*.log
+/uploads/
