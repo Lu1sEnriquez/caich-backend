@@ -4,19 +4,17 @@ FROM mcr.microsoft.com/mssql/server:2022-latest
 USER root
 WORKDIR /usr/src/app
 
-# Copiar scripts y EL BACKUP
-COPY init.sql .
+# Copiar scripts de inicialización
+COPY migration_v1_initial.sql .
 COPY entrypoint.sh .
-COPY CaichDB.bak .
 
-# Dar permisos (Importante para que el usuario mssql pueda leer el backup)
-RUN chmod +x entrypoint.sh && \
-    chown mssql:root CaichDB.bak
+# Dar permisos al script de arranque
+RUN chmod +x entrypoint.sh
 
 USER mssql
 
 ENV ACCEPT_EULA=Y
-ENV SA_PASSWORD=YourStrong!Passw0rd
+ENV MSSQL_SA_PASSWORD=UserP@ssw0rd!
 ENV MSSQL_PID=Express
 
 EXPOSE 1433

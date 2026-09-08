@@ -33,6 +33,10 @@ public class TicketBasicoDTO {
     // Info mínima de creador
     private Long creadoPorId;
     private String creadoPorNombre;
+
+    private Long compradorId;
+    private String compradorNombre;
+    private String compradorRol;
     
     // Info mínima de paciente si tiene cita
     private Long pacienteId;
@@ -68,6 +72,9 @@ public class TicketBasicoDTO {
                 .saldoPendiente(ticket.getSaldoPendiente())
                 .creadoPorId(ticket.getCreadoPor().getUsuarioId())
                 .creadoPorNombre(ticket.getCreadoPor().getNombreCompleto())
+                .compradorId(ticket.getComprador() != null ? ticket.getComprador().getUsuarioId() : null)
+                .compradorNombre(ticket.getComprador() != null ? ticket.getComprador().getNombreCompleto() : null)
+                .compradorRol(ticket.getComprador() != null ? ticket.getComprador().getRol() : null)
                 .tieneCita(ticket.getCita() != null)
                 .tieneEspacios(ticket.getEspacios() != null && !ticket.getEspacios().isEmpty())
                 .tieneVentas(ticket.getVentas() != null && !ticket.getVentas().isEmpty())

@@ -52,4 +52,13 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     @Query("SELECT COUNT(u) FROM Usuario u WHERE u.estado = 'Activo'")
     Long countUsuariosActivos();
+
+    /** Busca pacientes por nombre (parcial, sin distinción mayúsculas) para el selector de la reserva alumno. */
+    @Query("SELECT u FROM Usuario u WHERE u.rol = 'Paciente' AND u.estado = 'Activo' " +
+            "AND LOWER(u.nombreCompleto) LIKE LOWER(CONCAT('%', :nombre, '%')) " +
+            "ORDER BY u.nombreCompleto ASC")
+    List<Usuario> findPacientesActivosByNombreLike(@Param("nombre") String nombre);
+
+    /** Busca un paciente por nombre completo exacto (sin distinción mayúsculas) para deduplicación. */
+    Optional<Usuario> findByNombreCompletoIgnoreCaseAndRol(String nombreCompleto, String rol);
 }

@@ -174,6 +174,25 @@ public class FileStorageService {
         }
     }
 
+    public String almacenarComprobanteRecarga(MultipartFile file, Long alumnoId) {
+        validarComprobanteArchivo(file);
+        try {
+            Path uploadPath = Paths.get(uploadDir, "recargas");
+            Files.createDirectories(uploadPath);
+
+            String extension = obtenerExtension(file.getOriginalFilename());
+            String fileName = "recarga_" + alumnoId + "_" + UUID.randomUUID() + "." + extension;
+            Path filePath = uploadPath.resolve(fileName);
+
+            Files.copy(file.getInputStream(), filePath);
+            log.info("Comprobante de recarga guardado: {}", filePath);
+            return "/uploads/recargas/" + fileName;
+        } catch (IOException e) {
+            log.error("Error al guardar comprobante de recarga", e);
+            throw new BusinessException("Error al guardar el comprobante de recarga: " + e.getMessage());
+        }
+    }
+
     public Resource cargarArchivo(String subdirectorio, String nombreArchivo) {
         try {
             Path baseDir = Paths.get(uploadDir).toAbsolutePath().normalize();

@@ -12,6 +12,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 
 import java.util.stream.Collectors;
 
@@ -41,6 +42,12 @@ public class GlobalExceptionHandler {
 
         BaseResponseDTO response = BaseResponseDTO.error(SecurityConstants.ERROR_VALIDATION_FAILED + errorMessage);
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<BaseResponseDTO> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        BaseResponseDTO response = BaseResponseDTO.error("Método HTTP no permitido para este recurso");
+        return new ResponseEntity<>(response, HttpStatus.METHOD_NOT_ALLOWED);
     }
 
     @ExceptionHandler(BadCredentialsException.class)

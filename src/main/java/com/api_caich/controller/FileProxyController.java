@@ -21,7 +21,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/files")
+@RequestMapping("/files")
 @RequiredArgsConstructor
 public class FileProxyController {
 
@@ -30,7 +30,7 @@ public class FileProxyController {
     /**
      * Proxy para descargar archivos desde Google Drive
      * 
-     * Uso: /api/files/drive-proxy?id=1Cc7Yw7guYgnpWkgXi9UzF-O4_woLDg2b
+     * Uso: /caich-api/files/drive-proxy?id=1Cc7Yw7guYgnpWkgXi9UzF-O4_woLDg2b
      * 
      * @param fileId ID del archivo en Google Drive
      * @return Archivo descargado con headers CORS

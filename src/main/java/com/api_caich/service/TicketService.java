@@ -33,6 +33,7 @@ import com.api_caich.enums.EstadoPagoTransaccion;
 import com.api_caich.enums.EstadoPrestamo;
 import com.api_caich.enums.EstadoTicket;
 import com.api_caich.enums.Role;
+import com.api_caich.enums.MetodoPago;
 import com.api_caich.exception.BusinessException;
 import com.api_caich.exception.ResourceNotFoundException;
 import com.api_caich.repository.EspacioRepository;
@@ -64,6 +65,7 @@ public class TicketService {
     private final NotificacionService notificacionService;
     private final AuditoriaService auditoriaService;
     private final FolioGenerator folioGenerator;
+    private final MonederoService monederoService;
 
     /**
      * Crear ticket con Arquitectura Modular de Composición Soporta Ventas,
@@ -78,6 +80,17 @@ public class TicketService {
         Usuario creadoPor = usuarioRepository.findById(creadoPorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario creador no encontrado"));
 
+        Usuario comprador = null;
+        if (request.getCompradorId() != null) {
+            comprador = usuarioRepository.findById(request.getCompradorId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Comprador no encontrado"));
+        }
+
+        if (Boolean.TRUE.equals(request.getCobrarConMonedero())
+                && (comprador == null || !Role.ALUMNO.getNombre().equalsIgnoreCase(comprador.getRol()))) {
+            throw new BusinessException("El cobro con monedero solo está disponible para alumnos");
+        }
+
         // 2. Generar folio único
         String folio = folioGenerator.generarFolioTicket();
 
@@ -85,6 +98,7 @@ public class TicketService {
         Ticket ticket = new Ticket();
         ticket.setFolio(folio);
         ticket.setCreadoPor(creadoPor);
+        ticket.setComprador(comprador);
         ticket.setEstadoTicket(request.getEstadoTicket());
         ticket.setEstadoFinanciero(request.getEstadoFinanciero());
         ticket.setCostoAdicional(request.getCostoAdicional() != null ? request.getCostoAdicional() : BigDecimal.ZERO);
@@ -263,6 +277,15 @@ public class TicketService {
         // 9. Guardar todo en una sola transacción
         Ticket ticketGuardado = ticketRepository.save(ticket);
 
+        // El cobro desde monedero es inmediato y deja el movimiento ligado al ticket.
+        if (Boolean.TRUE.equals(request.getCobrarConMonedero())) {
+            monederoService.descontarSaldo(
+                    comprador.getUsuarioId(), ticketGuardado, ticketGuardado.getMontoTotal());
+            ticketGuardado.setMontoPagado(ticketGuardado.getMontoTotal());
+            ticketGuardado.setEstadoFinanciero(EstadoFinanciero.PAGADO);
+            ticketGuardado = ticketRepository.save(ticketGuardado);
+        }
+
         // 10. Registrar auditoría
         auditoriaService.registrarCambio("Tickets", ticketGuardado.getTicketId(), "Crear",
                 "Ticket modular creado con folio: " + folio, null, null, request.getCreadoPorId(), "SYSTEM");
@@ -301,7 +324,7 @@ public class TicketService {
 
         // 2. Actualizar estados si se proporcionan
         if (request.getEstadoTicket() != null && !request.getEstadoTicket().equals(ticket.getEstadoTicket())) {
-            validarTransicionEstado(ticket.getEstadoTicket(), request.getEstadoTicket());
+            validarTransicionEstado(ticket, request.getEstadoTicket());
             ticket.setEstadoTicket(request.getEstadoTicket());
         }
 
@@ -517,7 +540,7 @@ public class TicketService {
 
         if (nuevoEstado != null && !nuevoEstado.equals(ticket.getEstadoTicket())) {
             // Validar transiciones permitidas
-            validarTransicionEstado(ticket.getEstadoTicket(), nuevoEstado);
+            validarTransicionEstado(ticket, nuevoEstado);
 
             EstadoTicket estadoAnterior = ticket.getEstadoTicket();
             ticket.setEstadoTicket(nuevoEstado);
@@ -616,6 +639,10 @@ public class TicketService {
             throw new BusinessException("No se puede cancelar un ticket completado");
         }
 
+        if (ticket.getEstadoTicket() == EstadoTicket.NO_ASISTIO) {
+            throw new BusinessException("No se puede cancelar un ticket marcado como no asistió");
+        }
+
         // Cambiar estado
         ticket.setEstadoTicket(EstadoTicket.CANCELADO);
 
@@ -643,6 +670,14 @@ public class TicketService {
         }
 
         ticketRepository.save(ticket);
+
+        // Si el ticket fue pagado con monedero, crear solicitud de devolución pendiente
+        boolean fuePagadoConMonedero = ticket.getPagos() != null && ticket.getPagos().stream()
+                .anyMatch(p -> p.getMetodoPago() == MetodoPago.MONEDERO
+                            && p.getEstado() == EstadoPagoTransaccion.APROBADO);
+        if (fuePagadoConMonedero) {
+            monederoService.crearSolicitudDevolucion(ticket, motivo);
+        }
 
         // Notificar cancelación si hay cita
         if (ticket.getCita() != null && ticket.getCita().getPaciente() != null) {
@@ -913,6 +948,14 @@ public class TicketService {
                 break;
 
             case ALUMNO:
+                // El alumno solo puede consultar sus propias reservas y compras.
+                boolean esCreadorAlumno = ticket.getCreadoPor() != null
+                        && ticket.getCreadoPor().getUsuarioId().equals(usuarioId);
+                if (!esCreadorAlumno) {
+                    throw new BusinessException("No tiene acceso a este ticket");
+                }
+                break;
+
             default:
                 throw new BusinessException("No tiene permisos para ver tickets");
         }
@@ -968,9 +1011,19 @@ public class TicketService {
     /**
      * Validar transiciones de estado permitidas
      */
-    private void validarTransicionEstado(EstadoTicket estadoActual, EstadoTicket estadoNuevo) {
-        if (estadoActual == EstadoTicket.CANCELADO || estadoActual == EstadoTicket.COMPLETADO) {
+    private void validarTransicionEstado(Ticket ticket, EstadoTicket estadoNuevo) {
+        EstadoTicket estadoActual = ticket.getEstadoTicket();
+        if (estadoActual == EstadoTicket.CANCELADO
+                || estadoActual == EstadoTicket.COMPLETADO
+                || estadoActual == EstadoTicket.NO_ASISTIO) {
             throw new BusinessException("No se puede modificar un ticket en estado: " + estadoActual);
+        }
+
+        if (estadoNuevo == EstadoTicket.COMPLETADO || estadoNuevo == EstadoTicket.NO_ASISTIO) {
+            LocalDateTime finServicio = obtenerFinServicio(ticket);
+            if (finServicio != null && LocalDateTime.now().isBefore(finServicio)) {
+                throw new BusinessException("Solo se puede completar o marcar como no asistió después de que termine el horario");
+            }
         }
 
         // Validaciones adicionales según estado actual
@@ -981,18 +1034,35 @@ public class TicketService {
             case AGENDADO -> {
                 if (estadoNuevo != EstadoTicket.EN_PROGRESO
                         && estadoNuevo != EstadoTicket.COMPLETADO
+                        && estadoNuevo != EstadoTicket.NO_ASISTIO
                         && estadoNuevo != EstadoTicket.CANCELADO) {
                     throw new BusinessException("Transición no permitida: " + estadoActual + " -> " + estadoNuevo);
                 }
             }
             case EN_PROGRESO -> {
-                if (estadoNuevo != EstadoTicket.COMPLETADO && estadoNuevo != EstadoTicket.CANCELADO) {
+                if (estadoNuevo != EstadoTicket.COMPLETADO
+                        && estadoNuevo != EstadoTicket.NO_ASISTIO
+                        && estadoNuevo != EstadoTicket.CANCELADO) {
                     throw new BusinessException("Transición no permitida: " + estadoActual + " -> " + estadoNuevo);
                 }
             }
             default -> {
             }
         }
+    }
+
+    private LocalDateTime obtenerFinServicio(Ticket ticket) {
+        if (ticket.getCita() != null && ticket.getCita().getFechaFin() != null) {
+            return ticket.getCita().getFechaFin();
+        }
+        if (ticket.getEspacios() == null) {
+            return null;
+        }
+        return ticket.getEspacios().stream()
+                .map(TicketEspacio::getHoraFinReserva)
+                .filter(Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
     }
 
     /**

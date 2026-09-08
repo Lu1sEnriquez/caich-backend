@@ -6,6 +6,8 @@ import java.time.LocalTime;
 
 import com.api_caich.enums.Role;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -24,6 +26,8 @@ import com.api_caich.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 
 @Component
+@Profile("!prod")
+@Order(1)
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
 
@@ -44,79 +48,125 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void initializeUsers() {
-        if (usuarioRepository.count() > 0) {
-            System.out.println("⏭️  Usuarios ya inicializados");
-            return;
+        int created = 0;
+
+        created += crearUsuarioSiNoExiste(
+                "Administrador Sistema",
+                "admin@caich.com",
+                Role.ADMINISTRADOR,
+                EstadoUsuario.ACTIVO,
+                "ADM-001",
+                null,
+                "6441000000",
+                LocalDateTime.now().minusMinutes(15));
+
+        // Usuario demo TESORERIA
+        created += crearUsuarioSiNoExiste(
+            "Tesorería CAICH",
+            "tesoreria@caich.com",
+            Role.TESORERIA,
+            EstadoUsuario.ACTIVO,
+            "TES-001",
+            null,
+            "6445000000",
+            LocalDateTime.now().minusMinutes(10));
+
+        created += crearUsuarioSiNoExiste(
+                "Coordinación Recepción CAICH",
+                "recepcion1@caich.com",
+                Role.ADMINISTRADOR,
+                EstadoUsuario.ACTIVO,
+                "ADM-002",
+                null,
+                "6441000001",
+                LocalDateTime.now().minusHours(2));
+
+        created += crearUsuarioSiNoExiste(
+                "Dr. Juan Martínez Terapeuta",
+                "terapeuta1@caich.com",
+                Role.TERAPEUTA,
+                EstadoUsuario.ACTIVO,
+                "TER-001",
+                null,
+                "6442000001",
+                LocalDateTime.now().minusHours(6));
+
+        created += crearUsuarioSiNoExiste(
+                "Dra. Ana Rodríguez Terapeuta",
+                "terapeuta2@caich.com",
+                Role.TERAPEUTA,
+                EstadoUsuario.ACTIVO,
+                "TER-002",
+                null,
+                "6442000002",
+                LocalDateTime.now().minusHours(4));
+
+        created += crearUsuarioSiNoExiste(
+                "Pedro Hernández Paciente",
+                "paciente1@caich.com",
+                Role.PACIENTE,
+                EstadoUsuario.ACTIVO,
+                "PAC-001",
+                null,
+                "6443000001",
+                LocalDateTime.now().minusDays(1));
+
+        created += crearUsuarioSiNoExiste(
+                "Laura Sánchez Paciente",
+                "paciente2@caich.com",
+                Role.PACIENTE,
+                EstadoUsuario.ACTIVO,
+                "PAC-002",
+                null,
+                "6443000002",
+                LocalDateTime.now().minusHours(10));
+
+        created += crearUsuarioSiNoExiste(
+                "Luis Fernando Acosta",
+                "alumno1@caich.com",
+                Role.ALUMNO,
+                EstadoUsuario.ACTIVO,
+                "ALU-2024-001",
+                "2024001",
+                "6444000001",
+                LocalDateTime.now().minusHours(8));
+
+        created += crearUsuarioSiNoExiste(
+                "Valeria Montaño Castro",
+                "alumno2@caich.com",
+                Role.ALUMNO,
+                EstadoUsuario.ACTIVO,
+                "ALU-2024-002",
+                "2024002",
+                "6444000002",
+                LocalDateTime.now().minusHours(12));
+
+        if (created == 0) {
+            System.out.println("⏭️  Usuarios demo ya inicializados");
+        } else {
+            System.out.println("✅ " + created + " usuarios demo asegurados (password: 123456)");
+        }
+    }
+
+    private int crearUsuarioSiNoExiste(String nombreCompleto, String email, Role role,
+                                       EstadoUsuario estado, String folio, String idAlumno,
+                                       String telefono, LocalDateTime ultimaConexion) {
+        if (usuarioRepository.findByEmail(email).isPresent()) {
+            return 0;
         }
 
-        // Admin
-        Usuario admin = new Usuario();
-        admin.setNombreCompleto("Administrador Sistema");
-        admin.setEmail("admin@caich.com");
-        admin.setPasswordHash(passwordEncoder.encode("123456"));
-        admin.setRol(Role.ADMINISTRADOR.getNombre());
-        admin.setEstado(EstadoUsuario.ACTIVO.getValor());
-        usuarioRepository.save(admin);
-
-        Usuario recep2 = new Usuario();
-        recep2.setNombreCompleto("Carlos López Recepcionista");
-        recep2.setEmail("recepcion1@caich.com");
-        recep2.setPasswordHash(passwordEncoder.encode("123456"));
-        recep2.setRol(Role.ADMINISTRADOR.getNombre());
-        recep2.setEstado(EstadoUsuario.ACTIVO.getValor());
-        usuarioRepository.save(recep2);
-
-        // Terapeutas
-        Usuario terapeuta1 = new Usuario();
-        terapeuta1.setNombreCompleto("Dr. Juan Martínez Terapeuta");
-        terapeuta1.setEmail("terapeuta1@caich.com");
-        terapeuta1.setPasswordHash(passwordEncoder.encode("123456"));
-        terapeuta1.setRol(Role.TERAPEUTA.getNombre());
-        terapeuta1.setEstado(EstadoUsuario.ACTIVO.getValor());
-        usuarioRepository.save(terapeuta1);
-
-        Usuario terapeuta2 = new Usuario();
-        terapeuta2.setNombreCompleto("Dra. Ana Rodríguez Terapeuta");
-        terapeuta2.setEmail("terapeuta2@caich.com");
-        terapeuta2.setPasswordHash(passwordEncoder.encode("123456"));
-        terapeuta2.setRol(Role.TERAPEUTA.getNombre());
-        terapeuta2.setEstado(EstadoUsuario.ACTIVO.getValor());
-        usuarioRepository.save(terapeuta2);
-
-        // Pacientes
-        Usuario paciente1 = new Usuario();
-        paciente1.setNombreCompleto("Pedro Hernández Paciente");
-        paciente1.setEmail("paciente1@caich.com");
-        paciente1.setPasswordHash(passwordEncoder.encode("123456"));
-        paciente1.setRol(Role.PACIENTE.getNombre());
-        paciente1.setEstado(EstadoUsuario.ACTIVO.getValor());
-        usuarioRepository.save(paciente1);
-
-        Usuario paciente2 = new Usuario();
-        paciente2.setNombreCompleto("Laura Sánchez Paciente");
-        paciente2.setEmail("paciente2@caich.com");
-        paciente2.setPasswordHash(passwordEncoder.encode("123456"));
-        paciente2.setRol(Role.PACIENTE.getNombre());
-        paciente2.setEstado(EstadoUsuario.ACTIVO.getValor());
-        usuarioRepository.save(paciente2);
-
-        Usuario Alumno1 = new Usuario();
-        Alumno1.setNombreCompleto("Alumno1");
-        Alumno1.setEmail("alumno1@caich.com");
-        Alumno1.setPasswordHash(passwordEncoder.encode("123456"));
-        Alumno1.setRol(Role.ALUMNO.getNombre());
-        Alumno1.setEstado(EstadoUsuario.ACTIVO.getValor());
-        usuarioRepository.save(Alumno1);
-
-        Usuario Alumno2 = new Usuario();
-        Alumno2.setNombreCompleto("Alumno2");
-        Alumno2.setEmail("alumno2@caich.com");
-        Alumno2.setPasswordHash(passwordEncoder.encode("123456"));
-        Alumno2.setRol(Role.ALUMNO.getNombre());
-        Alumno2.setEstado(EstadoUsuario.ACTIVO.getValor());
-        usuarioRepository.save(Alumno2);
-
-        System.out.println("✅ 7 usuarios de prueba creados (password: 123456)");
+        Usuario usuario = new Usuario();
+        usuario.setNombreCompleto(nombreCompleto);
+        usuario.setEmail(email);
+        usuario.setPasswordHash(passwordEncoder.encode("123456"));
+        usuario.setRol(role.getNombre());
+        usuario.setEstado(estado.getValor());
+        usuario.setFolio(folio);
+        usuario.setIdAlumno(idAlumno);
+        usuario.setTelefono(telefono);
+        usuario.setUltimaConexion(ultimaConexion);
+        usuarioRepository.save(usuario);
+        return 1;
     }
 
     private void initializeProducts() {

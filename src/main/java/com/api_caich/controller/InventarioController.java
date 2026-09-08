@@ -141,7 +141,7 @@ public class InventarioController {
     }
 
     @GetMapping("/productos")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA', 'ALUMNO')")
     @Operation(summary = "Get all products", description = "Get paginated list of products")
     public ResponseEntity<DataResponseDTO<Page<Producto>>> listarProductos(
             @RequestParam(required = false) String nombre,

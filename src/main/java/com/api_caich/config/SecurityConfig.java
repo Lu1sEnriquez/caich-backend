@@ -48,6 +48,9 @@ public class SecurityConfig {
                         .requestMatchers("/motivos-sancion/**").hasRole(Role.ADMINISTRADOR.getRoleValue())
 
                         // Endpoints públicos
+                        // Los comprobantes de recarga se entregan sólo por el endpoint de Monedero,
+                        // que valida al propietario y el rol antes de devolver el archivo.
+                        .requestMatchers("/uploads/recargas/**").denyAll()
                         .requestMatchers(
                                 "/auth/**",
                                 "/v3/api-docs/**",
@@ -83,14 +86,25 @@ public class SecurityConfig {
 
                         // Endpoints de administración
                         .requestMatchers(
-                                "/usuarios/**",
                                 "/reportes/**",
                                 "/auditoria/**",
                                 "/configuracion/**",
                                 "/health/database",
                                 "/pagos/**",
-                                "/sanciones/**")
+                                "/sanciones/**",
+                                "/admin/monedero/**")
                         .hasRole(Role.ADMINISTRADOR.getRoleValue())
+
+                        // El controlador limita cada operación del monedero con @PreAuthorize.
+                        // Aquí deben poder entrar también Tesorería (confirmación de pagos)
+                        // y Administración (validación final de recargas).
+                        .requestMatchers(
+                                "/monedero/**"
+                        ).hasAnyRole(
+                                Role.ADMINISTRADOR.getRoleValue(),
+                                Role.TERAPEUTA.getRoleValue(),
+                                Role.ALUMNO.getRoleValue(),
+                                Role.TESORERIA.getRoleValue())
 
                         // Endpoints PACIENTE
                         .requestMatchers(
@@ -121,7 +135,7 @@ public class SecurityConfig {
                                 "/espacios/**",
                                 "/inventario/productos/stock-bajo",
                                 "/inventario/productos/sin-stock")
-                        .hasAnyRole(Role.ADMINISTRADOR.getRoleValue(), Role.TERAPEUTA.getRoleValue(), Role.ALUMNO.getRoleValue())
+                        .hasAnyRole(Role.ADMINISTRADOR.getRoleValue(), Role.TERAPEUTA.getRoleValue(), Role.ALUMNO.getRoleValue(), Role.TESORERIA.getRoleValue())
 
                         // Endpoints de testing de roles
                         .requestMatchers(

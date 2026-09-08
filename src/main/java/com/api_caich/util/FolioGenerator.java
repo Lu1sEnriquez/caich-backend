@@ -23,7 +23,15 @@ public class FolioGenerator {
      */
     public String generarFolioTicket() {
         String yearPrefix = LocalDateTime.now().format(YEAR_FORMATTER);
-        int nextSequence = ticketRepository.findMaxSequenceForCurrentYear() + 1;
+
+        int currentMax = ticketRepository.findFoliosByYearPrefix(yearPrefix).stream()
+                .filter(folio -> folio != null && folio.matches("^\\d{6}$"))
+                .map(folio -> folio.substring(2))
+                .mapToInt(Integer::parseInt)
+                .max()
+                .orElse(0);
+
+        int nextSequence = currentMax + 1;
         return String.format("%s%04d", yearPrefix, nextSequence);
     }
 }

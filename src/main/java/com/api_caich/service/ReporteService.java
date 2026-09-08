@@ -332,6 +332,10 @@ public class ReporteService {
                 pagos = pagoRepository.findAll();
             }
 
+            pagos = pagos.stream()
+                .filter(p -> p.getMetodoPago() != com.api_caich.enums.MetodoPago.MONEDERO)
+                .collect(Collectors.toList());
+
             String[] headers = {
                 "ID",
                 "Folio Ticket",

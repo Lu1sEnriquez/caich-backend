@@ -16,6 +16,8 @@ import lombok.NoArgsConstructor;
 public class MisReservasDTO {
 
     private Long ticketId;
+    private Long espacioReservaId;
+    private Long espacioId;
     private String folio;
     private String espacioNombre;
     private LocalDate fecha;
