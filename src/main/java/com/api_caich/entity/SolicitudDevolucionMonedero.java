@@ -50,6 +50,16 @@ public class SolicitudDevolucionMonedero extends BaseEntity {
     @Column(name = "MontoDevolucion", nullable = false, precision = 10, scale = 2)
     private BigDecimal montoDevolucion;
 
+    /** Importe finalmente autorizado; puede ser menor que el solicitado. */
+    @Column(name = "MontoAprobado", precision = 10, scale = 2)
+    private BigDecimal montoAprobado;
+
+    @Column(name = "MotivoCancelacion", length = 500)
+    private String motivoCancelacion;
+
+    @Column(name = "MotivoAprobacion", length = 500)
+    private String motivoAprobacion;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "Estado", nullable = false, length = 20)
     private EstadoDevolucionMonedero estado = EstadoDevolucionMonedero.PENDIENTE;

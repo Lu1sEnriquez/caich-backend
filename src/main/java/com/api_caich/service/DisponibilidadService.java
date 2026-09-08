@@ -229,7 +229,8 @@ public class DisponibilidadService {
         List<TicketEspacio> ticketsReservados = ticketEspacioRepository
             .findByHoraInicioReservaBetween(inicioDelDia, finDelDia).stream()
             .filter(te -> te.getEspacio().getEspacioId().equals(espacioId))
-            .filter(te -> !te.getTicket().getEstadoTicket().equals(EstadoTicket.CANCELADO))
+            .filter(te -> te.getTicket().getEstadoTicket() != EstadoTicket.CANCELADO
+                    && te.getTicket().getEstadoTicket() != EstadoTicket.NO_ASISTIO)
             .filter(te -> ticketIdToExclude == null || !te.getTicket().getTicketId().equals(ticketIdToExclude))
             .collect(Collectors.toList());
 

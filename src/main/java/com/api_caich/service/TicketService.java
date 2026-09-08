@@ -324,7 +324,7 @@ public class TicketService {
 
         // 2. Actualizar estados si se proporcionan
         if (request.getEstadoTicket() != null && !request.getEstadoTicket().equals(ticket.getEstadoTicket())) {
-            validarTransicionEstado(ticket.getEstadoTicket(), request.getEstadoTicket());
+            validarTransicionEstado(ticket, request.getEstadoTicket());
             ticket.setEstadoTicket(request.getEstadoTicket());
         }
 
@@ -540,7 +540,7 @@ public class TicketService {
 
         if (nuevoEstado != null && !nuevoEstado.equals(ticket.getEstadoTicket())) {
             // Validar transiciones permitidas
-            validarTransicionEstado(ticket.getEstadoTicket(), nuevoEstado);
+            validarTransicionEstado(ticket, nuevoEstado);
 
             EstadoTicket estadoAnterior = ticket.getEstadoTicket();
             ticket.setEstadoTicket(nuevoEstado);
@@ -639,6 +639,10 @@ public class TicketService {
             throw new BusinessException("No se puede cancelar un ticket completado");
         }
 
+        if (ticket.getEstadoTicket() == EstadoTicket.NO_ASISTIO) {
+            throw new BusinessException("No se puede cancelar un ticket marcado como no asistió");
+        }
+
         // Cambiar estado
         ticket.setEstadoTicket(EstadoTicket.CANCELADO);
 
@@ -672,7 +676,7 @@ public class TicketService {
                 .anyMatch(p -> p.getMetodoPago() == MetodoPago.MONEDERO
                             && p.getEstado() == EstadoPagoTransaccion.APROBADO);
         if (fuePagadoConMonedero) {
-            monederoService.crearSolicitudDevolucion(ticket);
+            monederoService.crearSolicitudDevolucion(ticket, motivo);
         }
 
         // Notificar cancelación si hay cita
@@ -1007,9 +1011,19 @@ public class TicketService {
     /**
      * Validar transiciones de estado permitidas
      */
-    private void validarTransicionEstado(EstadoTicket estadoActual, EstadoTicket estadoNuevo) {
-        if (estadoActual == EstadoTicket.CANCELADO || estadoActual == EstadoTicket.COMPLETADO) {
+    private void validarTransicionEstado(Ticket ticket, EstadoTicket estadoNuevo) {
+        EstadoTicket estadoActual = ticket.getEstadoTicket();
+        if (estadoActual == EstadoTicket.CANCELADO
+                || estadoActual == EstadoTicket.COMPLETADO
+                || estadoActual == EstadoTicket.NO_ASISTIO) {
             throw new BusinessException("No se puede modificar un ticket en estado: " + estadoActual);
+        }
+
+        if (estadoNuevo == EstadoTicket.COMPLETADO || estadoNuevo == EstadoTicket.NO_ASISTIO) {
+            LocalDateTime finServicio = obtenerFinServicio(ticket);
+            if (finServicio != null && LocalDateTime.now().isBefore(finServicio)) {
+                throw new BusinessException("Solo se puede completar o marcar como no asistió después de que termine el horario");
+            }
         }
 
         // Validaciones adicionales según estado actual
@@ -1020,18 +1034,35 @@ public class TicketService {
             case AGENDADO -> {
                 if (estadoNuevo != EstadoTicket.EN_PROGRESO
                         && estadoNuevo != EstadoTicket.COMPLETADO
+                        && estadoNuevo != EstadoTicket.NO_ASISTIO
                         && estadoNuevo != EstadoTicket.CANCELADO) {
                     throw new BusinessException("Transición no permitida: " + estadoActual + " -> " + estadoNuevo);
                 }
             }
             case EN_PROGRESO -> {
-                if (estadoNuevo != EstadoTicket.COMPLETADO && estadoNuevo != EstadoTicket.CANCELADO) {
+                if (estadoNuevo != EstadoTicket.COMPLETADO
+                        && estadoNuevo != EstadoTicket.NO_ASISTIO
+                        && estadoNuevo != EstadoTicket.CANCELADO) {
                     throw new BusinessException("Transición no permitida: " + estadoActual + " -> " + estadoNuevo);
                 }
             }
             default -> {
             }
         }
+    }
+
+    private LocalDateTime obtenerFinServicio(Ticket ticket) {
+        if (ticket.getCita() != null && ticket.getCita().getFechaFin() != null) {
+            return ticket.getCita().getFechaFin();
+        }
+        if (ticket.getEspacios() == null) {
+            return null;
+        }
+        return ticket.getEspacios().stream()
+                .map(TicketEspacio::getHoraFinReserva)
+                .filter(Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
     }
 
     /**

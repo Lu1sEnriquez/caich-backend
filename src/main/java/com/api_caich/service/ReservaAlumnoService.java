@@ -1,6 +1,7 @@
 package com.api_caich.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -13,6 +14,8 @@ import com.api_caich.dto.horario.DisponibilidadDTO;
 import com.api_caich.dto.reserva.CrearReservaAlumnoDTO;
 import com.api_caich.dto.reserva.MisReservasDTO;
 import com.api_caich.dto.reserva.ReservaAlumnoResponseDTO;
+import com.api_caich.dto.reserva.ReprogramarReservaAlumnoDTO;
+import com.api_caich.dto.reserva.ReprogramarReservaAlumnoResponseDTO;
 import com.api_caich.entity.Espacio;
 import com.api_caich.entity.Pago;
 import com.api_caich.entity.Producto;
@@ -23,6 +26,7 @@ import com.api_caich.entity.TicketPrestamo;
 import com.api_caich.entity.TicketVenta;
 import com.api_caich.entity.Usuario;
 import com.api_caich.enums.EstadoFinanciero;
+import com.api_caich.enums.EstadoPagoTransaccion;
 import com.api_caich.enums.EstadoPrestamo;
 import com.api_caich.enums.EstadoSancion;
 import com.api_caich.enums.EstadoTicket;
@@ -64,6 +68,7 @@ public class ReservaAlumnoService {
     private final InventarioService inventarioService;
     private final FolioGenerator folioGenerator;
     private final MonederoService monederoService;
+    private final TicketService ticketService;
     private final PasswordEncoder passwordEncoder;
     /**
      * Obtiene las reservas del alumno
@@ -92,6 +97,8 @@ public class ReservaAlumnoService {
 
                     return MisReservasDTO.builder()
                             .ticketId(t.getTicketId())
+                            .espacioReservaId(te.getId())
+                            .espacioId(te.getEspacio().getEspacioId())
                             .folio(t.getFolio())
                             .espacioNombre(te.getEspacio().getNombre())
                             .fecha(fechaReserva)
@@ -111,6 +118,142 @@ public class ReservaAlumnoService {
                 }))
                 .filter(dto -> dto != null)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Reprograma una reserva propia respetando las reglas normales del horario.
+     * Si cambia la duración, ajusta el monedero en la misma transacción: cobra la
+     * diferencia si aumenta el costo y acredita el saldo si disminuye.
+     */
+    @Transactional
+    public ReprogramarReservaAlumnoResponseDTO reprogramarReserva(
+            Long ticketId,
+            ReprogramarReservaAlumnoDTO request,
+            Long alumnoId) {
+
+        Ticket ticket = obtenerTicketPropioActivo(ticketId, alumnoId);
+        TicketEspacio reserva = obtenerReservaUnica(ticket);
+        validarAnticipacionDeGestion(reserva);
+
+        LocalDateTime inicio = LocalDateTime.of(request.getFecha(), request.getHoraInicio());
+        LocalDateTime fin = LocalDateTime.of(request.getFecha(), request.getHoraFin());
+        if (!fin.isAfter(inicio)) {
+            throw new BusinessException("La hora de fin debe ser posterior a la hora de inicio");
+        }
+        if (!inicio.isAfter(LocalDateTime.now())) {
+            throw new BusinessException("La nueva reserva debe iniciar en una fecha y hora futuras");
+        }
+
+        long duracionNueva = java.time.Duration.between(inicio, fin).toMinutes();
+        validarDuracionConfigurada(reserva.getEspacio().getEspacioId(), inicio.toLocalDate(), duracionNueva, ticketId);
+
+        if (!disponibilidadService.estaDisponible(
+                reserva.getEspacio().getEspacioId(), inicio, fin, ticketId)) {
+            throw new BusinessException("El horario seleccionado ya no está disponible");
+        }
+
+        BigDecimal costoAnterior = reserva.getCostoCobrado();
+        BigDecimal nuevoCosto = calcularCostoReserva(reserva.getEspacio(), duracionNueva);
+        BigDecimal diferencia = nuevoCosto.subtract(costoAnterior);
+
+        // Primero se valida y ajusta el saldo; cualquier error revierte también
+        // el cambio de horario gracias a la transacción.
+        if (diferencia.compareTo(BigDecimal.ZERO) > 0) {
+            Pago pago = monederoService.descontarSaldo(alumnoId, ticket, diferencia);
+            ticket.getPagos().add(pago);
+        } else if (diferencia.compareTo(BigDecimal.ZERO) < 0) {
+            Pago pago = monederoService.acreditarAjusteReprogramacion(alumnoId, ticket, diferencia.abs());
+            ticket.getPagos().add(pago);
+        }
+
+        reserva.setHoraInicioReserva(inicio);
+        reserva.setHoraFinReserva(fin);
+        reserva.setCostoCobrado(nuevoCosto);
+        ticketEspacioRepository.save(reserva);
+
+        ticket.recalcularTotal();
+        recalcularPagoYEstadoFinanciero(ticket);
+        ticketRepository.save(ticket);
+
+        log.info("Reserva {} reprogramada por alumno {}. Costo {} -> {}", ticketId, alumnoId, costoAnterior, nuevoCosto);
+        return ReprogramarReservaAlumnoResponseDTO.builder()
+                .nuevoCosto(nuevoCosto)
+                .diferencia(diferencia)
+                .build();
+    }
+
+    /** Cancela una reserva propia usando el mismo flujo de devolución de monedero. */
+    @Transactional
+    public void cancelarReserva(Long ticketId, String motivo, Long alumnoId) {
+        Ticket ticket = obtenerTicketPropioActivo(ticketId, alumnoId);
+        validarAnticipacionDeGestion(obtenerReservaUnica(ticket));
+        ticketService.cancelarTicket(ticketId, motivo, alumnoId);
+    }
+
+    private Ticket obtenerTicketPropioActivo(Long ticketId, Long alumnoId) {
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new ResourceNotFoundException("Ticket no encontrado"));
+
+        if (ticket.getCreadoPor() == null
+                || !ticket.getCreadoPor().getUsuarioId().equals(alumnoId)) {
+            throw new BusinessException("No tienes permiso para gestionar esta reserva");
+        }
+        if (ticket.getEstadoTicket() == EstadoTicket.CANCELADO
+                || ticket.getEstadoTicket() == EstadoTicket.COMPLETADO
+                || ticket.getEstadoTicket() == EstadoTicket.NO_ASISTIO) {
+            throw new BusinessException("No se puede gestionar una reserva en estado: " + ticket.getEstadoTicket());
+        }
+        return ticket;
+    }
+
+    private TicketEspacio obtenerReservaUnica(Ticket ticket) {
+        if (ticket.getEspacios() == null || ticket.getEspacios().size() != 1) {
+            throw new BusinessException("Esta operación solo está disponible para reservas de un cubículo");
+        }
+        return ticket.getEspacios().get(0);
+    }
+
+    /** El alumno puede gestionar por su cuenta solo con más de 24 h de anticipación. */
+    private void validarAnticipacionDeGestion(TicketEspacio reserva) {
+        LocalDateTime limite = reserva.getHoraInicioReserva().minusHours(24);
+        if (!LocalDateTime.now().isBefore(limite)) {
+            throw new BusinessException(
+                    "Solo puedes cancelar o reprogramar hasta 24 horas antes del inicio de la reserva");
+        }
+    }
+
+    private void validarDuracionConfigurada(
+            Long espacioId, LocalDate fecha, long duracionMinutos, Long ticketId) {
+        DisponibilidadDTO disponibilidad = disponibilidadService.obtenerSlotsDisponibles(espacioId, fecha, ticketId);
+        if (!Boolean.TRUE.equals(disponibilidad.getAbierto()) || disponibilidad.getHorarioBase() == null) {
+            throw new BusinessException("El espacio no está disponible en la fecha seleccionada");
+        }
+        int minima = disponibilidad.getHorarioBase().getDuracionMinimaMinutos();
+        int maxima = disponibilidad.getHorarioBase().getDuracionMaximaMinutos();
+        if (duracionMinutos < minima || duracionMinutos > maxima) {
+            throw new BusinessException("La duración debe estar entre " + minima + " y " + maxima + " minutos");
+        }
+    }
+
+    private BigDecimal calcularCostoReserva(Espacio espacio, long duracionMinutos) {
+        return espacio.getCostoPorHora()
+                .multiply(BigDecimal.valueOf(duracionMinutos))
+                .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
+    }
+
+    private void recalcularPagoYEstadoFinanciero(Ticket ticket) {
+        BigDecimal montoPagado = ticket.getPagos().stream()
+                .filter(pago -> pago.getEstado() == EstadoPagoTransaccion.APROBADO)
+                .map(Pago::getMonto)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        ticket.setMontoPagado(montoPagado);
+        if (montoPagado.compareTo(BigDecimal.ZERO) <= 0) {
+            ticket.setEstadoFinanciero(EstadoFinanciero.PENDIENTE);
+        } else if (montoPagado.compareTo(ticket.getMontoTotal()) >= 0) {
+            ticket.setEstadoFinanciero(EstadoFinanciero.PAGADO);
+        } else {
+            ticket.setEstadoFinanciero(EstadoFinanciero.PAGO_PARCIAL);
+        }
     }
 
     /**
@@ -177,11 +320,12 @@ public class ReservaAlumnoService {
         }
 
         // 5. Calcular costo
-        long horas = java.time.temporal.ChronoUnit.HOURS.between(horaInicio, horaFin);
-        if (horas <= 0) {
+        long duracionMinutos = java.time.Duration.between(horaInicio, horaFin).toMinutes();
+        if (duracionMinutos <= 0) {
             throw new BusinessException("La hora de fin debe ser posterior a la hora de inicio");
         }
-        BigDecimal costo = espacio.getCostoPorHora().multiply(BigDecimal.valueOf(horas));
+        validarDuracionConfigurada(request.getEspacioId(), request.getFecha(), duracionMinutos, null);
+        BigDecimal costo = calcularCostoReserva(espacio, duracionMinutos);
 
         // 6. Verificar saldo suficiente ANTES de crear el ticket
         //    (el descuento atómico real lo hace MonederoService.descontarSaldo)

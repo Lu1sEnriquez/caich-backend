@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.api_caich.dto.monedero.CrearRecargaMonederoRequest;
+import com.api_caich.dto.monedero.AprobarDevolucionRequest;
 import com.api_caich.dto.monedero.MonederoDTO;
 import com.api_caich.dto.monedero.MovimientoMonederoDTO;
 import com.api_caich.dto.monedero.RecargaMonederoDTO;
@@ -303,7 +304,7 @@ public class MonederoService {
      * que fue pagado con monedero. El admin debe aprobarla manualmente.
      */
     @Transactional
-    public void crearSolicitudDevolucion(Ticket ticket) {
+    public void crearSolicitudDevolucion(Ticket ticket, String motivoCancelacion) {
         // Evitar duplicados
         if (devolucionRepository.existsByTicket_TicketId(ticket.getTicketId())) {
             log.warn("Ya existe solicitud de devolución para ticket {}", ticket.getTicketId());
@@ -331,6 +332,7 @@ public class MonederoService {
         solicitud.setTicket(ticket);
         solicitud.setMonedero(monedero);
         solicitud.setMontoDevolucion(montoMonedero);
+        solicitud.setMotivoCancelacion(motivoCancelacion);
         solicitud.setEstado(EstadoDevolucionMonedero.PENDIENTE);
         devolucionRepository.save(solicitud);
 
@@ -362,7 +364,8 @@ public class MonederoService {
      * Admin aprueba la devolución: acredita el monto al monedero.
      */
     @Transactional
-    public SolicitudDevolucionDTO aprobarDevolucion(Long solicitudId, Long adminId) {
+    public SolicitudDevolucionDTO aprobarDevolucion(
+            Long solicitudId, Long adminId, AprobarDevolucionRequest request) {
         SolicitudDevolucionMonedero solicitud = devolucionRepository.findById(solicitudId)
                 .orElseThrow(() -> new ResourceNotFoundException("Solicitud de devolución no encontrada"));
 
@@ -373,16 +376,21 @@ public class MonederoService {
         Usuario admin = usuarioRepository.findById(adminId)
                 .orElseThrow(() -> new ResourceNotFoundException("Admin no encontrado"));
 
+        BigDecimal montoAprobado = request.getMontoAprobado();
+        if (montoAprobado.compareTo(solicitud.getMontoDevolucion()) > 0) {
+            throw new BusinessException("El monto aprobado no puede ser mayor al solicitado");
+        }
+
         try {
             Monedero monedero = solicitud.getMonedero();
             BigDecimal saldoAnterior = monedero.getSaldo();
-            BigDecimal saldoNuevo = saldoAnterior.add(solicitud.getMontoDevolucion());
+            BigDecimal saldoNuevo = saldoAnterior.add(montoAprobado);
 
             monedero.setSaldo(saldoNuevo);
             monederoRepository.save(monedero);
 
             registrarMovimiento(monedero, TipoMovimientoMonedero.DEVOLUCION_CANCELACION,
-                    solicitud.getMontoDevolucion(), saldoAnterior, saldoNuevo,
+                    montoAprobado, saldoAnterior, saldoNuevo,
                     "Devolución por cancelación de reserva: " + solicitud.getTicket().getFolio(),
                     solicitud.getTicket(), null);
 
@@ -395,13 +403,17 @@ public class MonederoService {
                     });
 
             solicitud.setEstado(EstadoDevolucionMonedero.APROBADA);
+            solicitud.setMontoAprobado(montoAprobado);
+            solicitud.setMotivoAprobacion(request.getMotivoAprobacion());
             solicitud.setProcesadoPor(admin);
             solicitud.setFechaProcesamiento(LocalDateTime.now());
             solicitud = devolucionRepository.save(solicitud);
 
             // Actualizar estado financiero del ticket
             Ticket ticket = solicitud.getTicket();
-            ticket.setEstadoFinanciero(EstadoFinanciero.REEMBOLSADO);
+            ticket.setEstadoFinanciero(montoAprobado.compareTo(solicitud.getMontoDevolucion()) == 0
+                    ? EstadoFinanciero.REEMBOLSADO
+                    : EstadoFinanciero.REEMBOLSADO_PARCIAL);
             ticketRepository.save(ticket);
 
         } catch (ObjectOptimisticLockingFailureException ex) {
@@ -409,8 +421,7 @@ public class MonederoService {
         }
 
         notificacionService.notificarDevolucionAprobada(
-                solicitud.getMonedero().getAlumno().getUsuarioId(),
-                solicitud.getMontoDevolucion());
+                solicitud.getMonedero().getAlumno().getUsuarioId(), montoAprobado);
 
         return toDevolucionDTO(solicitud);
     }
@@ -505,6 +516,45 @@ public class MonederoService {
         return recargaRepository.findByMetodoPagoAndEstadoOrderByFechaSolicitudAsc(
                 MetodoPago.TESORERIA, EstadoRecargaMonedero.APROBADO)
                 .stream().map(this::toRecargaDTO).collect(java.util.stream.Collectors.toList());
+    }
+
+    /**
+     * Acredita al monedero la diferencia a favor generada al acortar una
+     * reserva. El movimiento y el pago negativo quedan ligados al mismo ticket
+     * para que el historial financiero permanezca conciliable.
+     */
+    @Transactional
+    public com.api_caich.entity.Pago acreditarAjusteReprogramacion(
+            Long alumnoId, Ticket ticket, BigDecimal monto) {
+        if (monto == null || monto.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("El ajuste a favor debe ser mayor a cero");
+        }
+
+        try {
+            Monedero monedero = monederoRepository.findByAlumno_UsuarioId(alumnoId)
+                    .orElseThrow(() -> new BusinessException("El alumno no tiene monedero activo"));
+
+            BigDecimal saldoAnterior = monedero.getSaldo();
+            BigDecimal saldoNuevo = saldoAnterior.add(monto);
+            monedero.setSaldo(saldoNuevo);
+            monederoRepository.save(monedero);
+
+            registrarMovimiento(monedero, TipoMovimientoMonedero.AJUSTE_CREDITO,
+                    monto, saldoAnterior, saldoNuevo,
+                    "Ajuste a favor por reprogramación: " + ticket.getFolio(),
+                    ticket, null);
+
+            com.api_caich.entity.Pago pago = new com.api_caich.entity.Pago();
+            pago.setTicket(ticket);
+            pago.setMonto(monto.negate());
+            pago.setMetodoPago(MetodoPago.MONEDERO);
+            pago.setEstado(EstadoPagoTransaccion.APROBADO);
+            pago.setNotas("Ajuste a favor acreditado al monedero por reprogramación");
+            pago.setFechaPago(LocalDateTime.now());
+            return pagoRepository.save(pago);
+        } catch (ObjectOptimisticLockingFailureException ex) {
+            throw new BusinessException("El monedero fue modificado concurrentemente. Intente de nuevo.");
+        }
     }
 
     @Transactional
@@ -781,8 +831,19 @@ public class MonederoService {
                 .alumnoId(s.getMonedero().getAlumno().getUsuarioId())
                 .alumnoNombre(s.getMonedero().getAlumno().getNombreCompleto())
                 .montoDevolucion(s.getMontoDevolucion())
+                .montoAprobado(s.getMontoAprobado())
                 .estado(s.getEstado().name())
+                .motivoCancelacion(s.getMotivoCancelacion())
+                .motivoAprobacion(s.getMotivoAprobacion())
                 .motivoRechazo(s.getMotivoRechazo())
+                .ticketMontoTotal(s.getTicket().getMontoTotal())
+                .ticketMontoPagado(s.getTicket().getMontoPagado())
+                .espacioNombre(s.getTicket().getEspacios().isEmpty()
+                        ? null : s.getTicket().getEspacios().get(0).getEspacio().getNombre())
+                .horaInicioReserva(s.getTicket().getEspacios().isEmpty()
+                        ? null : s.getTicket().getEspacios().get(0).getHoraInicioReserva())
+                .horaFinReserva(s.getTicket().getEspacios().isEmpty()
+                        ? null : s.getTicket().getEspacios().get(0).getHoraFinReserva())
                 .procesadoPorNombre(s.getProcesadoPor() != null ? s.getProcesadoPor().getNombreCompleto() : null)
                 .fechaSolicitud(s.getFechaSolicitud())
                 .fechaProcesamiento(s.getFechaProcesamiento())

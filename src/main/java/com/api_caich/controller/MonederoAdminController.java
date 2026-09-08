@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.api_caich.dto.DataResponseDTO;
+import com.api_caich.dto.monedero.AprobarDevolucionRequest;
 import com.api_caich.dto.monedero.MonederoDTO;
 import com.api_caich.dto.monedero.MovimientoMonederoDTO;
 import com.api_caich.dto.monedero.RecargaMonederoDTO;
@@ -124,8 +125,9 @@ public class MonederoAdminController {
     @Operation(summary = "Aprobar devolución: reintegra el monto al monedero del alumno")
     public ResponseEntity<DataResponseDTO<SolicitudDevolucionDTO>> aprobarDevolucion(
             @PathVariable Long solicitudId,
-            @AuthenticationPrincipal CustomUserDetails admin) {
-        SolicitudDevolucionDTO dto = monederoService.aprobarDevolucion(solicitudId, admin.getId());
+            @AuthenticationPrincipal CustomUserDetails admin,
+            @RequestBody @Validated AprobarDevolucionRequest request) {
+        SolicitudDevolucionDTO dto = monederoService.aprobarDevolucion(solicitudId, admin.getId(), request);
         return ResponseEntity.ok(DataResponseDTO.success(dto, "Devolución aprobada y saldo reintegrado"));
     }
 

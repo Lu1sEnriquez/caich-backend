@@ -17,8 +17,16 @@ public class SolicitudDevolucionDTO {
     private Long alumnoId;
     private String alumnoNombre;
     private BigDecimal montoDevolucion;
+    private BigDecimal montoAprobado;
     private String estado;              // EstadoDevolucionMonedero.name()
+    private String motivoCancelacion;
+    private String motivoAprobacion;
     private String motivoRechazo;
+    private BigDecimal ticketMontoTotal;
+    private BigDecimal ticketMontoPagado;
+    private String espacioNombre;
+    private LocalDateTime horaInicioReserva;
+    private LocalDateTime horaFinReserva;
     private String procesadoPorNombre;
     private LocalDateTime fechaSolicitud;
     private LocalDateTime fechaProcesamiento;
