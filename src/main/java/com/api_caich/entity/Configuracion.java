@@ -16,7 +16,7 @@ public class Configuracion {
     @Column(nullable = false)
     private String clave;
 
-    @Column(nullable = false, columnDefinition = "NVARCHAR(MAX)")
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String valor;
 
     private String descripcion;

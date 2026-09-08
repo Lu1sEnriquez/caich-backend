@@ -52,8 +52,10 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
     /**
      * Contar tickets creados hoy
      */
-    @Query(value = "SELECT COUNT(*) FROM Tickets WHERE CAST(FechaCreacion AS DATE) = CAST(GETDATE() AS DATE)", nativeQuery = true)
-    Long countTicketsHoy();
+    // TODO: GETDATE() y CAST(x AS DATE) son de SQL Server.
+    // Se reemplazó por JPQL portable usando parámetro de rango de fechas.
+    @Query("SELECT COUNT(t) FROM Ticket t WHERE t.fechaCreacion >= :inicioDia AND t.fechaCreacion < :finDia")
+    Long countTicketsHoy(@Param("inicioDia") LocalDateTime inicioDia, @Param("finDia") LocalDateTime finDia);
 
     /**
      * Contar tickets creados este mes
@@ -106,14 +108,12 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
         AND (:pacienteId IS NULL OR c.paciente.usuarioId = :pacienteId)
         AND (:terapeutaId IS NULL OR c.terapeuta.usuarioId = :terapeutaId)
         AND (
-            :fechaInicio IS NULL 
-            OR c.fechaInicio >= :fechaInicio 
-            OR (c IS NULL AND te.horaInicioReserva >= :fechaInicio)
+            (c IS NOT NULL AND c.fechaInicio >= COALESCE(:fechaInicio, c.fechaInicio))
+            OR (c IS NULL AND te.horaInicioReserva >= COALESCE(:fechaInicio, te.horaInicioReserva))
         )
         AND (
-            :fechaFin IS NULL 
-            OR c.fechaInicio <= :fechaFin 
-            OR (c IS NULL AND te.horaInicioReserva <= :fechaFin)
+            (c IS NOT NULL AND c.fechaInicio <= COALESCE(:fechaFin, c.fechaInicio))
+            OR (c IS NULL AND te.horaInicioReserva <= COALESCE(:fechaFin, te.horaInicioReserva))
         )
     """)
     Page<Ticket> findWithFilters(
@@ -134,21 +134,15 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
         SELECT DISTINCT t FROM Ticket t 
         LEFT JOIN t.cita c 
         LEFT JOIN t.espacios te
+        LEFT JOIN t.comprador comprador
         WHERE (
             c.paciente.usuarioId = :pacienteId
+            OR comprador.usuarioId = :pacienteId
             OR (c IS NULL AND t.creadoPor.usuarioId = :pacienteId)
         )
         AND (:estadoTicket IS NULL OR t.estadoTicket = :estadoTicket)
-        AND (
-            :fechaInicio IS NULL 
-            OR c.fechaInicio >= :fechaInicio 
-            OR (c IS NULL AND te.horaInicioReserva >= :fechaInicio)
-        )
-        AND (
-            :fechaFin IS NULL 
-            OR c.fechaInicio <= :fechaFin 
-            OR (c IS NULL AND te.horaInicioReserva <= :fechaFin)
-        )
+        AND (COALESCE(c.fechaInicio, te.horaInicioReserva, t.fechaCreacion) >= COALESCE(:fechaInicio, COALESCE(c.fechaInicio, te.horaInicioReserva, t.fechaCreacion)))
+        AND (COALESCE(c.fechaInicio, te.horaInicioReserva, t.fechaCreacion) <= COALESCE(:fechaFin, COALESCE(c.fechaInicio, te.horaInicioReserva, t.fechaCreacion)))
     """)
     Page<Ticket> findByPacienteWithFilters(
             @Param("pacienteId") Long pacienteId,
@@ -172,14 +166,12 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
         )
         AND (:estadoTicket IS NULL OR t.estadoTicket = :estadoTicket)
         AND (
-            :fechaInicio IS NULL 
-            OR c.fechaInicio >= :fechaInicio 
-            OR (c IS NULL AND te.horaInicioReserva >= :fechaInicio)
+            (c IS NOT NULL AND c.fechaInicio >= COALESCE(:fechaInicio, c.fechaInicio))
+            OR (c IS NULL AND te.horaInicioReserva >= COALESCE(:fechaInicio, te.horaInicioReserva))
         )
         AND (
-            :fechaFin IS NULL 
-            OR c.fechaInicio <= :fechaFin 
-            OR (c IS NULL AND te.horaInicioReserva <= :fechaFin)
+            (c IS NOT NULL AND c.fechaInicio <= COALESCE(:fechaFin, c.fechaInicio))
+            OR (c IS NULL AND te.horaInicioReserva <= COALESCE(:fechaFin, te.horaInicioReserva))
         )
     """)
     Page<Ticket> findByTerapeutaWithFilters(
@@ -190,16 +182,34 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
             Pageable pageable
     );
 
+    /**
+     * Buscar tickets de un alumno con filtros
+     * Incluye solo tickets (reservas de cubículos) que creó el alumno
+     */
+    @Query("""
+        SELECT DISTINCT t FROM Ticket t 
+        LEFT JOIN t.espacios te
+        LEFT JOIN t.comprador comprador
+        WHERE (t.creadoPor.usuarioId = :alumnoId OR comprador.usuarioId = :alumnoId)
+        AND (:estadoTicket IS NULL OR t.estadoTicket = :estadoTicket)
+        AND (COALESCE(te.horaInicioReserva, t.fechaCreacion) >= COALESCE(:fechaInicio, COALESCE(te.horaInicioReserva, t.fechaCreacion)))
+        AND (COALESCE(te.horaInicioReserva, t.fechaCreacion) <= COALESCE(:fechaFin, COALESCE(te.horaInicioReserva, t.fechaCreacion)))
+    """)
+    Page<Ticket> findByAlumnoWithFilters(
+            @Param("alumnoId") Long alumnoId,
+            @Param("estadoTicket") EstadoTicket estadoTicket,
+            @Param("fechaInicio") LocalDateTime fechaInicio,
+            @Param("fechaFin") LocalDateTime fechaFin,
+            Pageable pageable
+    );
+
     // ========== GENERACIÓN DE FOLIOS ==========
     /**
-     * Obtener el número de secuencia más alto del mes actual para generar
-     * folios
+     * Obtiene todos los folios del año actual para calcular la siguiente secuencia
+     * en Java y evitar dependencias del motor de base de datos.
      */
-    @Query(value = "SELECT ISNULL(MAX(CAST(RIGHT(Folio, 4) AS INT)), 0) "
-            + "FROM Tickets "
-            + "WHERE Folio LIKE 'TKT-' + FORMAT(GETDATE(), 'yyyyMM') + '-%'",
-            nativeQuery = true)
-    int findMaxSequenceForCurrentMonth();
+    @Query("SELECT t.folio FROM Ticket t WHERE t.folio LIKE CONCAT(:yearPrefix, '%')")
+    List<String> findFoliosByYearPrefix(@Param("yearPrefix") String yearPrefix);
 
     // ========== CONSULTAS PARA DISPONIBILIDAD DE HORARIOS ==========
     /**

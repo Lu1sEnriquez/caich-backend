@@ -38,7 +38,7 @@ public class Producto extends BaseEntity {
     @Column(name = "Nombre", nullable = false, length = 200)
     private String nombre;
 
-    @Column(name = "Descripcion", columnDefinition = "NVARCHAR(MAX)")
+    @Column(name = "Descripcion", columnDefinition = "TEXT")
     private String descripcion;
 
     @Column(name = "Categoria", length = 50)

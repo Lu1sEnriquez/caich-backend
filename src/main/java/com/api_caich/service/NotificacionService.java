@@ -1,19 +1,21 @@
 package com.api_caich.service;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.api_caich.dto.notificacion.NotificacionDTO;
 import com.api_caich.entity.Notificacion;
 import com.api_caich.entity.Usuario;
 import com.api_caich.repository.NotificacionRepository;
 import com.api_caich.repository.UsuarioRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -228,6 +230,19 @@ public class NotificacionService {
         return noLeidas.size();
     }
 
+    @Transactional
+    public void eliminarNotificacion(Long notificacionId, Long usuarioId) {
+        Notificacion notificacion = notificacionRepository.findById(notificacionId)
+                .orElseThrow(() -> new RuntimeException("Notificación no encontrada"));
+
+        // Verificar que la notificación pertenece al usuario autenticado.
+        if (!notificacion.getUsuario().getUsuarioId().equals(usuarioId)) {
+            throw new RuntimeException("No autorizado para eliminar esta notificación");
+        }
+
+        notificacionRepository.delete(notificacion);
+    }
+
     public List<NotificacionDTO> obtenerNoLeidas(Long usuarioId) {
         List<Notificacion> notificaciones = notificacionRepository
                 .findByUsuarioUsuarioIdAndLeidaFalseOrderByFechaCreacionDesc(usuarioId);
@@ -248,6 +263,206 @@ public class NotificacionService {
         return notificaciones.stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
+    }
+
+    // ═══ Notificaciones para Reservas de Alumnos ═══
+    
+    public void notificarReservaAlumnoCreada(Long alumnoId, Long ticketId, String folio, String espacioNombre) {
+        Usuario alumno = usuarioRepository.findById(alumnoId).orElse(null);
+        if (alumno == null) return;
+
+        Notificacion notificacion = new Notificacion();
+        notificacion.setUsuario(alumno);
+        notificacion.setTipo("ReservaCreada");
+        notificacion.setTitulo("Reserva Creada");
+        notificacion.setMensaje(String.format(
+            "Tu reserva del cubículo '%s' se creó exitosamente. Folio: %s. Tu comprobante está pendiente de revisión.",
+            espacioNombre, folio));
+        notificacion.setReferenciaId(ticketId);
+        notificacion.setReferenciaUrl("/calendario-alumno");
+
+        notificacionRepository.save(notificacion);
+        log.info("Notificación de reserva creada enviada al alumno: {}", alumnoId);
+    }
+
+    public void notificarPagoReservaAprobado(Long alumnoId, Long ticketId, String folio) {
+        Usuario alumno = usuarioRepository.findById(alumnoId).orElse(null);
+        if (alumno == null) return;
+
+        Notificacion notificacion = new Notificacion();
+        notificacion.setUsuario(alumno);
+        notificacion.setTipo("PagoAprobado");
+        notificacion.setTitulo("Pago Aprobado");
+        notificacion.setMensaje(String.format(
+            "Tu comprobante de pago para la reserva %s ha sido aprobado. Tu reserva está confirmada.",
+            folio));
+        notificacion.setReferenciaId(ticketId);
+        notificacion.setReferenciaUrl("/calendario-alumno");
+
+        notificacionRepository.save(notificacion);
+    }
+
+    public void notificarPagoReservaRechazado(Long alumnoId, Long ticketId, String folio, String motivo) {
+        Usuario alumno = usuarioRepository.findById(alumnoId).orElse(null);
+        if (alumno == null) return;
+
+        Notificacion notificacion = new Notificacion();
+        notificacion.setUsuario(alumno);
+        notificacion.setTipo("PagoRechazado");
+        notificacion.setTitulo("Pago Rechazado");
+        notificacion.setMensaje(String.format(
+            "Tu comprobante de pago para la reserva %s fue rechazado. Motivo: %s. Por favor, sube un nuevo comprobante.",
+            folio, motivo));
+        notificacion.setReferenciaId(ticketId);
+        notificacion.setReferenciaUrl("/calendario-alumno");
+
+        notificacionRepository.save(notificacion);
+    }
+
+    public void notificarSancionAplicada(Long alumnoId, Long sancionId, String motivo) {
+        Usuario alumno = usuarioRepository.findById(alumnoId).orElse(null);
+        if (alumno == null) return;
+
+        Notificacion notificacion = new Notificacion();
+        notificacion.setUsuario(alumno);
+        notificacion.setTipo("SancionAplicada");
+        notificacion.setTitulo("Sanción Aplicada");
+        notificacion.setMensaje(String.format(
+            "Se ha aplicado una sanción a tu cuenta. Motivo: %s. Contacta con administración para más detalles.",
+            motivo));
+        notificacion.setReferenciaId(sancionId);
+        notificacion.setReferenciaUrl("/mis-tickets");
+
+        notificacionRepository.save(notificacion);
+    }
+
+    public void notificarPrestamoCubicloPendienteValidacion(Long ticketId, String folio, String responsableNombre, String productosNombre) {
+        // Notificar a todos los administradores
+        List<Usuario> administradores = usuarioRepository.findByRol("Administrador");
+
+        for (Usuario admin : administradores) {
+            Notificacion notificacion = new Notificacion();
+            notificacion.setUsuario(admin);
+            notificacion.setTipo("PrestamoCubicloPendiente");
+            notificacion.setTitulo("Préstamo de Cubículo Pendiente de Validación");
+            notificacion.setMensaje(String.format(
+                "Se ha creado un nuevo préstamo de cubículo (Folio: %s) por %s. Productos: %s. Por favor, valida el pago asociado.",
+                folio, responsableNombre, productosNombre));
+            notificacion.setReferenciaId(ticketId);
+            notificacion.setReferenciaUrl("/pagos?estado=pendiente");
+
+            notificacionRepository.save(notificacion);
+        }
+
+        log.info("Notificación de préstamo de cubículo pendiente enviada a administradores para ticket: {}", ticketId);
+    }
+
+    // ═══ Notificaciones de Monedero ═══
+
+    public void notificarNuevaRecargaMonedero(Long alumnoId, Long recargaId, java.math.BigDecimal monto) {
+        // Notificar al alumno que su solicitud fue recibida
+        Usuario alumno = usuarioRepository.findById(alumnoId).orElse(null);
+        if (alumno != null) {
+            Notificacion notifAlumno = new Notificacion();
+            notifAlumno.setUsuario(alumno);
+            notifAlumno.setTipo("RecargaSolicitada");
+            notifAlumno.setTitulo("Recarga Solicitada");
+            notifAlumno.setMensaje(String.format(
+                "Tu solicitud de recarga por $%.2f está pendiente de revisión. Te notificaremos cuando sea aprobada.", monto));
+            notifAlumno.setReferenciaId(recargaId);
+            notifAlumno.setReferenciaUrl("/mi-monedero");
+            notificacionRepository.save(notifAlumno);
+        }
+
+        // Notificar a todos los admins
+        List<Usuario> administradores = usuarioRepository.findByRol("Administrador");
+        for (Usuario admin : administradores) {
+            Notificacion notifAdmin = new Notificacion();
+            notifAdmin.setUsuario(admin);
+            notifAdmin.setTipo("RecargaPendiente");
+            notifAdmin.setTitulo("Nueva Recarga Pendiente");
+            notifAdmin.setMensaje(String.format(
+                "El alumno %s solicitó una recarga de $%.2f. Folio de recarga: #%d.",
+                alumno != null ? alumno.getNombreCompleto() : "Desconocido", monto, recargaId));
+            notifAdmin.setReferenciaId(recargaId);
+            notifAdmin.setReferenciaUrl("/finanzas?tab=recargas");
+            notificacionRepository.save(notifAdmin);
+        }
+        log.info("Notificación de nueva recarga #{} enviada", recargaId);
+    }
+
+    public void notificarRecargaAprobada(Long alumnoId, java.math.BigDecimal monto) {
+        Usuario alumno = usuarioRepository.findById(alumnoId).orElse(null);
+        if (alumno == null) return;
+
+        Notificacion notificacion = new Notificacion();
+        notificacion.setUsuario(alumno);
+        notificacion.setTipo("RecargaAprobada");
+        notificacion.setTitulo("Recarga Aprobada ✓");
+        notificacion.setMensaje(String.format(
+            "¡Tu recarga de $%.2f fue aprobada! El saldo ya está disponible en tu monedero.", monto));
+        notificacion.setReferenciaUrl("/mi-monedero");
+        notificacionRepository.save(notificacion);
+    }
+
+    public void notificarRecargaRechazada(Long alumnoId, java.math.BigDecimal monto, String motivo) {
+        Usuario alumno = usuarioRepository.findById(alumnoId).orElse(null);
+        if (alumno == null) return;
+
+        Notificacion notificacion = new Notificacion();
+        notificacion.setUsuario(alumno);
+        notificacion.setTipo("RecargaRechazada");
+        notificacion.setTitulo("Recarga Rechazada");
+        notificacion.setMensaje(String.format(
+            "Tu solicitud de recarga por $%.2f fue rechazada. Motivo: %s. Puedes reintentar con un comprobante corregido.",
+            monto, motivo));
+        notificacion.setReferenciaUrl("/mi-monedero");
+        notificacionRepository.save(notificacion);
+    }
+
+    public void notificarSolicitudDevolucion(Long alumnoId, Long ticketId, java.math.BigDecimal monto) {
+        // Notificar al alumno
+        Usuario alumno = usuarioRepository.findById(alumnoId).orElse(null);
+        if (alumno != null) {
+            Notificacion notifAlumno = new Notificacion();
+            notifAlumno.setUsuario(alumno);
+            notifAlumno.setTipo("DevolucionPendiente");
+            notifAlumno.setTitulo("Devolución Pendiente");
+            notifAlumno.setMensaje(String.format(
+                "Tu reserva fue cancelada. Se generó una solicitud de devolución por $%.2f. " +
+                "El administrador la procesará pronto.", monto));
+            notifAlumno.setReferenciaId(ticketId);
+            notifAlumno.setReferenciaUrl("/mi-monedero");
+            notificacionRepository.save(notifAlumno);
+        }
+
+        // Notificar admins
+        List<Usuario> administradores = usuarioRepository.findByRol("Administrador");
+        for (Usuario admin : administradores) {
+            Notificacion notifAdmin = new Notificacion();
+            notifAdmin.setUsuario(admin);
+            notifAdmin.setTipo("DevolucionPendiente");
+            notifAdmin.setTitulo("Devolución de Monedero Pendiente");
+            notifAdmin.setMensaje(String.format(
+                "Se canceló una reserva pagada con monedero. Monto a devolver: $%.2f. Ticket: #%d.", monto, ticketId));
+            notifAdmin.setReferenciaId(ticketId);
+            notifAdmin.setReferenciaUrl("/finanzas?tab=devoluciones");
+            notificacionRepository.save(notifAdmin);
+        }
+    }
+
+    public void notificarDevolucionAprobada(Long alumnoId, java.math.BigDecimal monto) {
+        Usuario alumno = usuarioRepository.findById(alumnoId).orElse(null);
+        if (alumno == null) return;
+
+        Notificacion notificacion = new Notificacion();
+        notificacion.setUsuario(alumno);
+        notificacion.setTipo("DevolucionAprobada");
+        notificacion.setTitulo("Devolución Aprobada ✓");
+        notificacion.setMensaje(String.format(
+            "¡Se reintegró $%.2f a tu monedero por la cancelación de tu reserva!", monto));
+        notificacion.setReferenciaUrl("/mi-monedero");
+        notificacionRepository.save(notificacion);
     }
 
     @Scheduled(cron = "0 0 2 * * SUN")

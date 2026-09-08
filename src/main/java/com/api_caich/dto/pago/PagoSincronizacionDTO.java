@@ -22,6 +22,11 @@ public class PagoSincronizacionDTO {
     private Integer numeroFila;
     
     /**
+     * Email del usuario que reportó el pago
+     */
+    private String email;
+    
+    /**
      * Folio del ticket
      */
     private String folio;
@@ -50,6 +55,11 @@ public class PagoSincronizacionDTO {
      * URL del comprobante en Google Drive
      */
     private String comprobanteUrl;
+    
+    /**
+     * Notas adicionales del formulario
+     */
+    private String notasAdicionales;
     
     /**
      * Indica si el registro es válido para sincronización
@@ -85,4 +95,10 @@ public class PagoSincronizacionDTO {
      * Indica si este pago ya fue sincronizado anteriormente
      */
     private Boolean esDuplicado;
+
+    /**
+     * Marca temporal de la respuesta del formulario (columna 0 del CSV).
+     * Se usa como identificador único para detección de duplicados.
+     */
+    private String marcaTemporal;
 }

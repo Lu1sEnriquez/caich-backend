@@ -42,6 +42,11 @@ public class Ticket extends BaseEntity {
     @JoinColumn(name = "CreadoPor", nullable = false)
     private Usuario creadoPor; // Quién hizo el ticket en el sistema
 
+    /** Persona a quien se vende o presta; puede ser distinta de quien lo capturó. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "CompradorId")
+    private Usuario comprador;
+
     // --- ESTATUS ---
     @Enumerated(EnumType.STRING)
     @Column(name = "EstadoTicket", nullable = false)

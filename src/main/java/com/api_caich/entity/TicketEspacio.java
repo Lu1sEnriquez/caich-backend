@@ -42,4 +42,18 @@ public class TicketEspacio {
     // Costo por usar el espacio (puede ser 0 si es alumno)
     @Column(name = "CostoCobrado", nullable = false, precision = 10, scale = 2)
     private BigDecimal costoCobrado;
+
+    @Column(name = "Celular", length = 20)
+    private String celular;
+
+    @Column(name = "Actividad", length = 255)
+    private String actividad;
+
+    @Column(name = "Maestro", length = 255)
+    private String maestro;
+
+    /** Paciente al que se atiende en esta reserva (opcional, lo vincula el alumno). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "PacienteId")
+    private Usuario paciente;
 }

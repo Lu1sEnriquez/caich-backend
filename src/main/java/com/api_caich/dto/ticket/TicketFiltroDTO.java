@@ -23,6 +23,11 @@ public class TicketFiltroDTO {
     private String creadoPorNombre;
     private String creadoPorEmail;
 
+    // Persona que compra o recibe el servicio, cuando es distinta del capturista
+    private String compradorNombre;
+    private String compradorEmail;
+    private String compradorRol;
+
     // Estados
     private EstadoTicket estadoTicket;
     private EstadoFinanciero estadoFinanciero;
@@ -92,6 +97,9 @@ public class TicketFiltroDTO {
                 .folio(ticket.getFolio())
                 .creadoPorNombre(ticket.getCreadoPor().getNombreCompleto())
                 .creadoPorEmail(ticket.getCreadoPor().getEmail())
+                .compradorNombre(ticket.getComprador() != null ? ticket.getComprador().getNombreCompleto() : null)
+                .compradorEmail(ticket.getComprador() != null ? ticket.getComprador().getEmail() : null)
+                .compradorRol(ticket.getComprador() != null ? ticket.getComprador().getRol() : null)
                 .estadoTicket(ticket.getEstadoTicket())
                 .estadoFinanciero(ticket.getEstadoFinanciero())
                 .pacienteNombre(pacienteNombre)

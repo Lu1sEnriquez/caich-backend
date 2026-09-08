@@ -126,6 +126,16 @@ public class UsuarioController {
         return ResponseEntity.ok(DataResponseDTO.success(usuario, "User retrieved successfully"));
     }
 
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Get current user", description = "Get authenticated user profile")
+    public ResponseEntity<DataResponseDTO<UsuarioDTO>> obtenerMiUsuario(
+            @AuthenticationPrincipal CustomUserDetails authentication) {
+
+        UsuarioDTO usuario = usuarioService.obtenerUsuarioPorId(authentication.getId());
+        return ResponseEntity.ok(DataResponseDTO.success(usuario, "Current user retrieved successfully"));
+    }
+
     @GetMapping("/email/{email}")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get user by email", description = "Get user details by email")

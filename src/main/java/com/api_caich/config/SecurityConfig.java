@@ -5,10 +5,12 @@ import java.util.Arrays;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -26,6 +28,7 @@ import com.api_caich.security.JwtAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     @Autowired
@@ -40,7 +43,14 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
+                        // Motivos de sancion: solo GET publico, cambios solo admin
+                        .requestMatchers(HttpMethod.GET, "/motivos-sancion/**").permitAll()
+                        .requestMatchers("/motivos-sancion/**").hasRole(Role.ADMINISTRADOR.getRoleValue())
+
                         // Endpoints públicos
+                        // Los comprobantes de recarga se entregan sólo por el endpoint de Monedero,
+                        // que valida al propietario y el rol antes de devolver el archivo.
+                        .requestMatchers("/uploads/recargas/**").denyAll()
                         .requestMatchers(
                                 "/auth/**",
                                 "/v3/api-docs/**",
@@ -61,30 +71,51 @@ public class SecurityConfig {
                                 Role.PACIENTE.getRoleValue()
                         )
 
+                        // Endpoints PACIENTE para pagos (ANTES del wildcard /pagos/**)
+                        .requestMatchers(HttpMethod.POST, "/pagos")
+                        .hasAnyRole(
+                                Role.ADMINISTRADOR.getRoleValue(),
+                                Role.PACIENTE.getRoleValue()
+                        )
+                        .requestMatchers("/pagos/registrar-propio")
+                        .hasRole(Role.PACIENTE.getRoleValue())
+
                         // Cuentas bancarias — solo admin
                         .requestMatchers("/cuentas-bancarias/**")
                         .hasRole(Role.ADMINISTRADOR.getRoleValue())
 
                         // Endpoints de administración
                         .requestMatchers(
-                                "/usuarios/**",
                                 "/reportes/**",
                                 "/auditoria/**",
                                 "/configuracion/**",
                                 "/health/database",
-                                "/pagos/**")
+                                "/pagos/**",
+                                "/sanciones/**",
+                                "/admin/monedero/**")
                         .hasRole(Role.ADMINISTRADOR.getRoleValue())
+
+                        // El controlador limita cada operación del monedero con @PreAuthorize.
+                        // Aquí deben poder entrar también Tesorería (confirmación de pagos)
+                        // y Administración (validación final de recargas).
+                        .requestMatchers(
+                                "/monedero/**"
+                        ).hasAnyRole(
+                                Role.ADMINISTRADOR.getRoleValue(),
+                                Role.TERAPEUTA.getRoleValue(),
+                                Role.ALUMNO.getRoleValue(),
+                                Role.TESORERIA.getRoleValue())
 
                         // Endpoints PACIENTE
                         .requestMatchers(
-                                "/pagos/registrar-propio",
                                 "/tickets/mis-tickets",
                                 "/tickets/{ticketId}/comprobante"
                         ).hasRole(Role.PACIENTE.getRoleValue())
 
                         // Endpoints ALUMNO personales
                         .requestMatchers(
-                                "/prestamos/mis-prestamos"
+                                "/prestamos/mis-prestamos",
+                                "/reservas/alumno/**"
                         ).hasRole(Role.ALUMNO.getRoleValue())
 
                         // Endpoints de terapeuta y creación
@@ -104,7 +135,7 @@ public class SecurityConfig {
                                 "/espacios/**",
                                 "/inventario/productos/stock-bajo",
                                 "/inventario/productos/sin-stock")
-                        .hasAnyRole(Role.ADMINISTRADOR.getRoleValue(), Role.TERAPEUTA.getRoleValue(), Role.ALUMNO.getRoleValue())
+                        .hasAnyRole(Role.ADMINISTRADOR.getRoleValue(), Role.TERAPEUTA.getRoleValue(), Role.ALUMNO.getRoleValue(), Role.TESORERIA.getRoleValue())
 
                         // Endpoints de testing de roles
                         .requestMatchers(

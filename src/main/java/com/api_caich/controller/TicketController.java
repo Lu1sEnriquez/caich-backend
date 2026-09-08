@@ -133,7 +133,7 @@ public class TicketController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA', 'PACIENTE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA', 'PACIENTE', 'ALUMNO')")
     @Operation(summary = "Get tickets with filters (basic info)", description = "Get paginated and filtered tickets with basic information based on user role")
     public ResponseEntity<DataResponseDTO<Page<TicketBasicoDTO>>> obtenerTicketsBasico(
             @Parameter(description = "Patient ID") @RequestParam(required = false) Long pacienteId,
@@ -174,7 +174,7 @@ public class TicketController {
     }
 
     @GetMapping("/{ticketId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA', 'PACIENTE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA', 'PACIENTE', 'ALUMNO')")
     @Operation(summary = "Get ticket by ID (detailed)", description = "Get complete ticket details with all related data, with access control based on user role")
     public ResponseEntity<DataResponseDTO<TicketDTO>> obtenerTicketDetallado(
             @Parameter(description = "Ticket ID") @PathVariable Long ticketId,
@@ -202,5 +202,18 @@ public class TicketController {
         Page<TicketDTO> tickets = ticketService.obtenerMisTickets(userDetails.getId(), pageable);
 
         return ResponseEntity.ok(DataResponseDTO.success(tickets, "My tickets retrieved successfully"));
+    }
+
+    @PostMapping("/{ticketId}/recalcular-totales")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TERAPEUTA')")
+    @Operation(summary = "Recalculate ticket totals", description = "Recalculate montoTotal and estadoFinanciero based on current ticket items and payments")
+    public ResponseEntity<DataResponseDTO<TicketDTO>> recalcularTotales(
+            @Parameter(description = "Ticket ID") @PathVariable Long ticketId,
+            @AuthenticationPrincipal CustomUserDetails authentication) {
+
+        Long usuarioId = authentication.getId();
+        TicketDTO ticket = ticketService.recalcularTotalesTicket(ticketId, usuarioId);
+
+        return ResponseEntity.ok(DataResponseDTO.success(ticket, "Ticket totals recalculated successfully"));
     }
 }

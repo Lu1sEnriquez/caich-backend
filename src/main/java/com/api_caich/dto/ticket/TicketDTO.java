@@ -23,6 +23,10 @@ public class TicketDTO {
     private Long creadoPorId;
     private String creadoPorNombre;
 
+    private Long compradorId;
+    private String compradorNombre;
+    private String compradorRol;
+
     // Estados (enums)
     private EstadoTicket estadoTicket;
     private EstadoFinanciero estadoFinanciero;
@@ -108,6 +112,9 @@ public class TicketDTO {
                     .horaInicioReserva(espacio.getHoraInicioReserva())
                     .horaFinReserva(espacio.getHoraFinReserva())
                     .costoCobrado(espacio.getCostoCobrado())
+                    .celular(espacio.getCelular())
+                    .actividad(espacio.getActividad())
+                    .maestro(espacio.getMaestro())
                     .build())
                     .collect(Collectors.toList());
         }
@@ -135,6 +142,9 @@ public class TicketDTO {
                 .folio(ticket.getFolio())
                 .creadoPorId(ticket.getCreadoPor().getUsuarioId())
                 .creadoPorNombre(ticket.getCreadoPor().getNombreCompleto())
+                .compradorId(ticket.getComprador() != null ? ticket.getComprador().getUsuarioId() : null)
+                .compradorNombre(ticket.getComprador() != null ? ticket.getComprador().getNombreCompleto() : null)
+                .compradorRol(ticket.getComprador() != null ? ticket.getComprador().getRol() : null)
                 .estadoTicket(ticket.getEstadoTicket())
                 .estadoFinanciero(ticket.getEstadoFinanciero())
                 .ventas(ventasDTO)

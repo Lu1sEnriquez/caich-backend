@@ -48,9 +48,9 @@ public class TicketCita {
     @Column(name = "PrecioCobrado", nullable = false, precision = 10, scale = 2)
     private BigDecimal precioCobrado;
 
-    @Column(name = "NotasTerapia", columnDefinition = "NVARCHAR(MAX)")
+    @Column(name = "NotasTerapia", columnDefinition = "TEXT")
     private String notasTerapia;
 
-    @Column(name = "Modalidad", length = 50, nullable = false, columnDefinition = "NVARCHAR(50) DEFAULT 'Presencial'")
+    @Column(name = "Modalidad", length = 50, nullable = false, columnDefinition = "VARCHAR(50) DEFAULT 'Presencial'")
     private String modalidad = "Presencial"; // Presencial u Online
 }

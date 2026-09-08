@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Objects;
 
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +16,8 @@ import com.api_caich.entity.Ticket;
 import com.api_caich.entity.Usuario;
 import com.api_caich.enums.EstadoFinanciero;
 import com.api_caich.enums.EstadoPagoTransaccion;
+import com.api_caich.enums.MetodoPago;
+import com.api_caich.enums.Role;
 import com.api_caich.exception.BusinessException;
 import com.api_caich.exception.ResourceNotFoundException;
 import com.api_caich.repository.PagoRepository;
@@ -43,8 +44,9 @@ public class PagoService {
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new ResourceNotFoundException("Ticket no encontrado"));
 
-                usuarioRepository.findById(Objects.requireNonNull(usuarioId, "usuarioId requerido"))
-            .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        Usuario usuario = usuarioRepository.findById(Objects.requireNonNull(usuarioId, "usuarioId requerido"))
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        validarPagoDirectoPaciente(ticket, usuario);
 
         // Validar monto
         if (pagoRequest.getMonto().compareTo(BigDecimal.ZERO) <= 0) {
@@ -125,23 +127,11 @@ public class PagoService {
         pago.setMotivoRechazo(motivo);
         pago = pagoRepository.save(pago);
 
-        // Revertir monto del ticket
-        Ticket ticket = pago.getTicket();
-        BigDecimal nuevoMontoPagado = ticket.getMontoPagado().subtract(pago.getMonto());
-        ticket.setMontoPagado(nuevoMontoPagado);
-        
-        // Recalcular estado financiero
-        if (nuevoMontoPagado.compareTo(BigDecimal.ZERO) <= 0) {
-            ticket.setEstadoFinanciero(EstadoFinanciero.PENDIENTE);
-        } else if (nuevoMontoPagado.compareTo(ticket.getMontoTotal()) >= 0) {
-            ticket.setEstadoFinanciero(EstadoFinanciero.PAGADO);
-        } else {
-            ticket.setEstadoFinanciero(EstadoFinanciero.PAGO_PARCIAL);
-        }
-        
-        ticketRepository.save(ticket);
+        // IMPORTANTE: Los pagos rechazados NO afectan el montoPagado del ticket
+        // porque nunca fueron sumados (solo se suman al ser APROBADOS).
+        // El pago simplemente cambia de estado y queda registrado en el historial.
 
-        log.info("Pago {} rechazado", pagoId);
+        log.info("Pago {} rechazado. montoPagado del ticket NO se modifica.", pagoId);
         return pago;
     }
 
@@ -152,6 +142,10 @@ public class PagoService {
 
         if (!EstadoPagoTransaccion.APROBADO.equals(pago.getEstado())) {
             throw new BusinessException("Solo se pueden cancelar pagos en estado APROBADO");
+        }
+        if (MetodoPago.MONEDERO.equals(pago.getMetodoPago())) {
+            throw new BusinessException(
+                    "Los pagos de monedero no se cancelan directamente. Cancele el ticket para iniciar la devolución.");
         }
 
         Usuario cancelador = usuarioRepository.findById(Objects.requireNonNull(usuarioId, "usuarioId requerido"))
@@ -190,15 +184,12 @@ public class PagoService {
     }
 
     public Page<Pago> obtenerTodosPagos(Pageable pageable) {
-        return pagoRepository.findAll(pageable);
+        return pagoRepository.findByMetodoPagoNot(MetodoPago.MONEDERO, pageable);
     }
 
     public Page<Pago> obtenerPagosConEstado(EstadoPagoTransaccion estado, Pageable pageable) {
-        List<Pago> pagos = pagoRepository.findByEstado(estado);
-        int start = Math.min((int) pageable.getOffset(), pagos.size());
-        int end = Math.min((start + pageable.getPageSize()), pagos.size());
-        List<Pago> pageContent = pagos.subList(start, end);
-        return new PageImpl<>(pageContent, pageable, pagos.size());
+        return pagoRepository.findByEstadoAndMetodoPagoNot(
+                estado, MetodoPago.MONEDERO, pageable);
     }
 
     public Pago obtenerPago(Long pagoId) {
@@ -220,6 +211,7 @@ public class PagoService {
 
         Usuario usuario = usuarioRepository.findById(Objects.requireNonNull(usuarioId, "usuarioId requerido"))
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        validarPagoDirectoPaciente(ticket, usuario);
 
         // Validar monto
         if (monto.compareTo(BigDecimal.ZERO) <= 0) {
@@ -267,6 +259,7 @@ public class PagoService {
 
         Usuario admin = usuarioRepository.findById(Objects.requireNonNull(adminId, "adminId requerido"))
                 .orElseThrow(() -> new ResourceNotFoundException("Administrador no encontrado"));
+        validarPagoDirectoPaciente(ticket, admin);
 
         // Validar monto
         if (monto.compareTo(BigDecimal.ZERO) <= 0) {
@@ -310,5 +303,20 @@ public class PagoService {
 
         log.info("Pago manual {} registrado y aprobado para ticket {}", pago.getPagoId(), ticketId);
         return pago;
+    }
+
+    private void validarPagoDirectoPaciente(Ticket ticket, Usuario usuario) {
+        if (ticket.getCita() == null || ticket.getCita().getPaciente() == null) {
+            throw new BusinessException(
+                    "Los pagos directos solo están disponibles para tickets de pacientes. Los alumnos deben usar monedero.");
+        }
+
+        boolean esAdministrador = usuario.getRol().equalsIgnoreCase(Role.ADMINISTRADOR.getNombre());
+        boolean esPacienteDelTicket = ticket.getCita().getPaciente().getUsuarioId()
+                .equals(usuario.getUsuarioId());
+
+        if (!esAdministrador && !esPacienteDelTicket) {
+            throw new BusinessException("No puede registrar pagos para el ticket de otro paciente");
+        }
     }
 }

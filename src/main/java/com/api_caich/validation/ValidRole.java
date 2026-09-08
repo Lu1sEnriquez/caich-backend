@@ -9,7 +9,7 @@ import java.lang.annotation.*;
 @Target({ElementType.FIELD, ElementType.PARAMETER})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ValidRole {
-    String message() default "Rol no valido. Roles validos: Terapeuta, Alumno, Paciente, Administrador";
+    String message() default "Rol no valido. Roles validos: Terapeuta, Alumno, Paciente, Administrador, Tesorería";
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
     boolean includeAdmin() default false; // Indica si se permite el rol Administrador

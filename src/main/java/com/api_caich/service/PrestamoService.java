@@ -41,6 +41,7 @@ public class PrestamoService {
     private final ProductoRepository productoRepository;
     private final AuditoriaService auditoriaService;
     private final FolioGenerator folioGenerator;
+    private final NotificacionService notificacionService;
 
     @Transactional
     public PrestamoDTO crearPrestamo(CrearPrestamoDTO prestamoDTO, Long usuarioId) {
@@ -103,6 +104,18 @@ public class PrestamoService {
         // Log audit
         auditoriaService.registrarCambio("Prestamos", prestamo.getId(), "Crear",
                 "Nuevo préstamo creado", null, prestamo.toString(), usuarioId, usuario.getEmail());
+
+        // Notificar a administradores si el creador no es admin
+        if (!usuario.getRol().equalsIgnoreCase("Administrador")) {
+            // Construir nombre de los productos
+            String productosNombre = producto.getNombre();
+            notificacionService.notificarPrestamoCubicloPendienteValidacion(
+                    ticket.getTicketId(),
+                    folio,
+                    responsable.getNombreCompleto(),
+                    productosNombre
+            );
+        }
 
         log.info("Prestamo creado: {} para producto: {}", prestamo.getId(), producto.getNombre());
 
@@ -250,7 +263,7 @@ public class PrestamoService {
 
         List<TicketPrestamo> prestamos = ticketPrestamoRepository.findAll().stream()
                 .filter(p -> p.getResponsable().equals(usuario) && EstadoPrestamo.ACTIVO.equals(p.getEstado()))
-                .collect(Collectors.toList());
+                .toList();
         return prestamos.stream().map(this::mapToDTO).collect(Collectors.toList());
     }
 

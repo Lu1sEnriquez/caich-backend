@@ -32,4 +32,8 @@ public class TicketEspacioDTO {
     @NotNull(message = "El costo cobrado es requerido")
     @DecimalMin(value = "0.0", message = "El costo debe ser mayor o igual a 0")
     private BigDecimal costoCobrado;
+
+    private String celular;
+    private String actividad;
+    private String maestro;
 }
