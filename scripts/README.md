@@ -1,16 +1,18 @@
-# Scripts locales de CAICH
+# Scripts de operación de CAICH
 
 ## Despliegue Windows con IIS
 
-La guía completa de instalación, servicios Windows y actualizaciones está en
-`../../caich-front/DEPLOYMENT_IIS.md`. Para actualizaciones posteriores al
-setup inicial usa:
+La guía exacta de instalación, IIS, servicios Windows, validación y
+actualizaciones está en `../../caich-front/DEPLOYMENT_IIS.md`. En Windows
+Server, después de la instalación inicial, actualiza ambos componentes con:
 
 ```powershell
 .\scripts\windows\deploy-caich.ps1 -Component All
 ```
 
-Estos scripts son exclusivamente para desarrollo local. No se deben ejecutar en producción.
+Los scripts `reset-local-db.ps1` y `test-monedero-e2e.ps1` que se describen
+abajo son exclusivamente para desarrollo local. Nunca se ejecutan en
+producción.
 
 ## Reiniciar la base con el seed
 

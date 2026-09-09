@@ -29,6 +29,7 @@ $frontendRoot = Join-Path $workspaceRoot 'caich-front'
 $apiDestination = 'C:\inetpub\wwwroot\caich-api'
 $apiJarSource = Join-Path $apiRoot 'target\api-caich-0.0.1-SNAPSHOT.jar'
 $apiJarDestination = Join-Path $apiDestination 'caich-api.jar'
+$apiWebConfigTemplate = Join-Path $apiRoot 'web.config.iis.template'
 
 function Stop-CaichService([string]$Name) {
     $service = Get-Service -Name $Name -ErrorAction SilentlyContinue
@@ -48,6 +49,11 @@ if ($Component -in @('All', 'Api')) {
     } finally { Pop-Location }
     New-Item -ItemType Directory -Path $apiDestination -Force | Out-Null
     Copy-Item -LiteralPath $apiJarSource -Destination $apiJarDestination -Force
+    if (-not (Test-Path -LiteralPath $apiWebConfigTemplate)) {
+        throw "No se encontró la plantilla IIS del backend: $apiWebConfigTemplate"
+    }
+    $apiWebConfig = (Get-Content -LiteralPath $apiWebConfigTemplate -Raw).Replace('__BACKEND_PORT__', '8080')
+    Set-Content -LiteralPath (Join-Path $apiDestination 'web.config') -Value $apiWebConfig -Encoding utf8 -NoNewline
     if ($apiServiceExists) { Start-CaichService 'CAICH-API' }
 }
 

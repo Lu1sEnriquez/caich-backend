@@ -41,7 +41,7 @@ foreach ($path in @($serviceRoot, $configRoot, $logRoot, 'C:\ProgramData\CAICH\u
 }
 
 if (-not (Test-Path -LiteralPath (Join-Path $frontendRoot 'server.js'))) {
-    throw "No está desplegado el frontend en $frontendRoot. Ejecuta primero npm run deploy:iis."
+    throw "No está desplegado el frontend en $frontendRoot. Ejecuta primero .\scripts\windows\deploy-caich.ps1 -Component Frontend."
 }
 if (-not (Test-Path -LiteralPath $apiJar)) {
     throw "No está desplegado el JAR en $apiJar. Ejecuta primero deploy-caich.ps1 -Component Api."
@@ -63,6 +63,7 @@ DB_USERNAME=CAMBIA_POR_EL_USUARIO_DE_BD
 DB_PASSWORD=CAMBIA_POR_LA_CONTRASENA_DE_BD
 JWT_SECRET=GENERA_UN_SECRETO_BASE64_LARGO
 APP_ENVIRONMENT=production
+SERVER_ADDRESS=127.0.0.1
 FILE_UPLOAD_DIR=C:\ProgramData\CAICH\uploads
 "@ | Set-Content -LiteralPath $apiEnv -Encoding utf8 -NoNewline
         throw "Se creó $apiEnv. Completa sus valores de producción y ejecuta de nuevo este script."
@@ -83,6 +84,7 @@ DB_USERNAME=myuser
 DB_PASSWORD=UserP@ssw0rd!
 JWT_SECRET=$jwtSecret
 APP_ENVIRONMENT=production
+SERVER_ADDRESS=127.0.0.1
 FILE_UPLOAD_DIR=C:\ProgramData\CAICH\uploads
 "@ | Set-Content -LiteralPath $apiEnv -Encoding utf8 -NoNewline
 }
@@ -122,6 +124,7 @@ function Install-CaichService {
   <executable>C:\Windows\System32\cmd.exe</executable>
   <arguments>/c ""$Runner""</arguments>
   <workingdirectory>$WorkingDirectory</workingdirectory>
+  <logpath>$logRoot</logpath>
   <log mode="roll-by-size"><sizeThreshold>10240</sizeThreshold><keepFiles>14</keepFiles></log>
   <onfailure action="restart" delay="10 sec" />
   <onfailure action="restart" delay="20 sec" />
